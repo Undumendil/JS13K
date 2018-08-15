@@ -1,0 +1,5 @@
+import sys, requests
+url = 'https://closure-compiler.appspot.com/compile'
+data = { 'js_code': open(sys.argv[1], 'rb').read(), 'compilation_level': 'ADVANCED_OPTIMIZATIONS', 'output_format': 'text', 'output_info': 'compiled_code' }
+response = requests.post(url, data=data)
+print(response.text)
