@@ -112,15 +112,15 @@
 
 		Array.prototype.VxV = function(v) {
 			return [
-				this[1] * v[2] - this[2] * v[1],
-				this[2] * v[0] - this[0] * v[2],
-				this[0] * v[1] - this[1] * v[0],
+				this[2] * v[1] - this[1] * v[2],
+				this[0] * v[2] - this[2] * v[0],
+				this[1] * v[0] - this[0] * v[1],
 				0
 			]
 		}
 
 		Array.prototype.VminusV = function(v) {
-			return [ v[0] - this[0], v[1] - this[1], v[2] - this[2] ]
+			return [ this[0] - v[0], this[1] - v[1], this[2] - v[2] ]
 		}
 
 		function mat(x = 0, y = 0, z = 0, a = 1, b = 1, c = 1, d = 0, e = 1) {
@@ -229,6 +229,7 @@
 				append(normals, n, 3)
 				append(normals, n, 3)
 				append(normals, n, 3)
+				console.log(n)
 			}
 			return createArrayBuffer(normals)
 		}
@@ -262,11 +263,14 @@
 			varying vec3 vNormal;
 
 			void main(void) {
+				vec3 impact = vec3(0.1, 0.1, 0.1);
 				vec4 sunDirection = uSun * vec4(0.0, 0.0, 0.0, 1.0);
+				if (sunDirection.y > -0.1)
+					impact += vec3(0.9, 0.9, 0.85) * max(0.0, dot(normalize(vNormal), normalize(sunDirection.xyz)));
 				vec4 moonDirection = uMoon * vec4(0.0, 0.0, 0.0, 1.0);
-				vec3 sunColor = vec3(0.9, 0.9, 0.85) * max(0.0, dot(normalize(vNormal), normalize(sunDirection.xyz)));
-				vec3 moonColor = vec3(0.1, 0.1, 0.5) * max(0.0, dot(normalize(vNormal), normalize(moonDirection.xyz)));
-				gl_FragColor = vec4(uColor * 0.1 + sunColor + moonColor, 1.0);
+				if (moonDirection.y > -0.1)
+					impact += vec3(0.1, 0.1, 0.5) * max(0.0, dot(normalize(vNormal), normalize(moonDirection.xyz)));
+				gl_FragColor = vec4(uColor * impact, 1.0);
 			}
 		`)
 
@@ -290,16 +294,14 @@
 
 		document.addEventListener('mousedown', e => {
 			CAMERA.isMoving = true
-			CAMERA.oldX = CAMERA.rotation.x
-			CAMERA.oldY = CAMERA.rotation.y
-			CAMERA.pivotX = e.x
-			CAMERA.pivotY = e.y
+			CAMERA.oldX = CAMERA.rotation.x + e.y / 500
+			CAMERA.oldY = CAMERA.rotation.y + e.x / 500
 		})
 
 		document.addEventListener('mousemove', e => {
 			if (CAMERA.isMoving) {
-				CAMERA.rotation.y = CAMERA.oldY - (e.x - CAMERA.pivotX) / 500
-				CAMERA.rotation.x = range(deg(10), CAMERA.oldX - (e.y - CAMERA.pivotY) / 500, deg(90))
+				CAMERA.rotation.y = CAMERA.oldY - e.x / 500
+				CAMERA.rotation.x = range(deg(10), CAMERA.oldX - e.y / 500, deg(90))
 			}
 		})
 
@@ -319,10 +321,59 @@
 		const vertexBuffer = createArrayBuffer(verts)
 		const normalsBuffer = createNormalsBuffer(verts)
 		const rect = new StaticMesh([1, 1, 1], 6, vertexBuffer, normalsBuffer)
-		rect.model.rotation.x = deg(-90)
+		rect.model.rotation.x = deg(90)
 
 		CAMERA.rotation.x = deg(10)
 		CAMERA.translation.y = 0.5
+
+		const boatices = [
+			3.4,	1,		0,
+			0,		1,		-1.6,
+			2.6,	-0.9,	0,
+			0,		1,		-1.6,
+			0,		-0.9,	0,
+			2.6,	-0.9,	0,
+			0,		1,		-1.6,
+			-2.6,	-0.9,	0,
+			0,		-0.9,	0,
+			0,		1,		-1.6,
+			-3.4,	1,		0,
+			-2.6,	-0.9,	0,
+			-3.4,	1,		0,
+			0,		1,		1.6,
+			-2.6,	-0.9,	0,
+			0,		1,		1.6,
+			0, 		-0.9, 	0,
+			-2.6,	-0.9,	0,
+			0,		1,		1.6,
+			2.6,	-0.9,	0,
+			0, 		-0.9, 	0,
+			0,		1,		1.6,
+			3.4,	1,		0,
+			2.6,	-0.9,	0,
+			3.4,	1,		0,
+			0,		1,		1.6,
+			0,		0.9,	0,
+			0,		1,		1.6,
+			-3.4,	1,		0,
+			0,		0.9,	0,
+			-3.4,	1,		0,
+			0,		1,		-1.6,
+			0,		0.9,	0,
+			0,		1,		-1.6,
+			3.4,	1,		0,
+			0,		0.9,	0,
+		]
+
+		const boaticesVertices = createArrayBuffer(boatices)
+		const boaticesNormals = createNormalsBuffer(boatices)
+		const boat = new StaticMesh([1, 0.5, 0.5], boatices.length / 3, boaticesVertices, boaticesNormals)
+		boat.model.translation.z = 5
+		boat.model.translation.y = -1
+
+		setInterval(() => {
+			boat.model.rotation.y += deg(1)
+		}, 20)
 
 		requestAnimationFrame(function render() {
 			space.width = space.clientWidth
@@ -337,6 +388,7 @@
 			gl.uniformMatrix4fv(MESH_PROGRAM_PROPERTIES.uMoon, false, MOON.total())
 			gl.uniformMatrix4fv(MESH_PROGRAM_PROPERTIES.uSun, false, SUN.total())
 			rect.render(MESH_PROGRAM, MESH_PROGRAM_PROPERTIES)
+			boat.render(MESH_PROGRAM, MESH_PROGRAM_PROPERTIES)
 			MOON.rotation.z += 0.001
 			SUN.rotation.z += 0.001
 			requestAnimationFrame(render)
