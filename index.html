@@ -36,7 +36,7 @@
 				this.color = color
 			}
 
-			render(program, properties) {
+			render(properties) {
 				properties.aNormal.set(this.normalsBuffer, 3)
 				properties.aPosition.set(this.vertexBuffer, 3)
 				gl.uniform3f(properties.uColor, this.color[0], this.color[1], this.color[2])
@@ -229,7 +229,6 @@
 				append(normals, n, 3)
 				append(normals, n, 3)
 				append(normals, n, 3)
-				console.log(n)
 			}
 			return createArrayBuffer(normals)
 		}
@@ -262,14 +261,20 @@
 			uniform mat4 uSun;
 			varying vec3 vNormal;
 
+			float state(float lower, float target, float higher) {
+				return max(0.0, min(1.0, (target - lower) / (higher - lower)));
+			}
+
 			void main(void) {
 				vec3 impact = vec3(0.1, 0.1, 0.1);
 				vec4 sunDirection = uSun * vec4(0.0, 0.0, 0.0, 1.0);
-				if (sunDirection.y > -0.1)
-					impact += vec3(0.9, 0.9, 0.85) * max(0.0, dot(normalize(vNormal), normalize(sunDirection.xyz)));
+				impact += vec3(0.9, 0.9, 0.85)
+						* max(0.0, dot(normalize(vNormal), normalize(sunDirection.xyz)))
+						* state(-0.1, sunDirection.y, 0.0);
 				vec4 moonDirection = uMoon * vec4(0.0, 0.0, 0.0, 1.0);
-				if (moonDirection.y > -0.1)
-					impact += vec3(0.1, 0.1, 0.5) * max(0.0, dot(normalize(vNormal), normalize(moonDirection.xyz)));
+				impact += vec3(0.3, 0.3, 0.5)
+						* max(0.0, dot(normalize(vNormal), normalize(moonDirection.xyz)))
+						* state(-0.1, moonDirection.y, 0.0);
 				gl_FragColor = vec4(uColor * impact, 1.0);
 			}
 		`)
@@ -307,6 +312,10 @@
 
 		document.addEventListener('mouseup', e => {
 			CAMERA.isMoving = false
+		})
+
+		document.addEventListener('wheel', e => {
+			CAMERA.offset.z = range(-10, CAMERA.offset.z - e.deltaY / 100, 0)
 		})
 
 		const verts = [
@@ -387,8 +396,8 @@
 			gl.uniformMatrix4fv(MESH_PROGRAM_PROPERTIES.uView, false, CAMERA.inverse())
 			gl.uniformMatrix4fv(MESH_PROGRAM_PROPERTIES.uMoon, false, MOON.total())
 			gl.uniformMatrix4fv(MESH_PROGRAM_PROPERTIES.uSun, false, SUN.total())
-			rect.render(MESH_PROGRAM, MESH_PROGRAM_PROPERTIES)
-			boat.render(MESH_PROGRAM, MESH_PROGRAM_PROPERTIES)
+			rect.render(MESH_PROGRAM_PROPERTIES)
+			boat.render(MESH_PROGRAM_PROPERTIES)
 			MOON.rotation.z += 0.001
 			SUN.rotation.z += 0.001
 			requestAnimationFrame(render)
