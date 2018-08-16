@@ -1,4 +1,6 @@
-fileName = 'boat2.obj'
+import sys
+
+fileName = sys.argv[1]
 
 name = None
 verticesIn = []
@@ -21,7 +23,7 @@ with open(fileName, 'r') as file:
 		words = line.split(' ')
 
 		if words[0] == 'o':
-			if len(verticesOut) > 0: 
+			if len(verticesOut) > 0:
 				displayCurrent()
 				verticesOut = []
 			name = words[1].replace('\n', '')
