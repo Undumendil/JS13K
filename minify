@@ -1,9 +1,14 @@
 #!/bin/bash
 rm result.zip 2>/dev/null
 mkdir .temp 2>/dev/null
-python py/js script.js > .temp/script.js
-python py/html index.html > .temp/index.html 
+for type in html css js; do
+	for file in $(find . -name "*.$type" -printf "%f\n"); do
+		echo "Compressing $file..."
+		python py/$type $file > .temp/$file
+	done
+done
+echo "Packing everything..."
 zip -j result.zip .temp/* &>/dev/null
 rm -rf .temp
 size=$(stat -c '%s' result.zip)
-echo "$size bytes of 13312: "$((size*100/13312))'%'
+echo "Final size: $size bytes of 13312 - $((size * 100 / 13312))%"
