@@ -560,7 +560,7 @@
 		BOAT_MAST.children.push(BOAT_SAIL)
 		const BOAT_SAIL_RIGHT = [11, 14, 16]
 		const BOAT_SAIL_LEFT = [0, 4, 6]
-
+		BOAT_MAST.model.rotation.y = Math.PI
 
 		requestAnimationFrame(function render() {
 			const newTime = new Date().getTime()
@@ -606,10 +606,10 @@
 				BOAT_BODY.model.rotation.y += 0.001 * WORLD.dt
 
 			if (KEYS["ArrowLeft"])
-				BOAT_MAST.model.rotation.y -= 0.002 * WORLD.dt
+				BOAT_MAST.model.rotation.y = Math.min(BOAT_MAST.model.rotation.y + 0.002 * WORLD.dt, 3 * Math.PI / 2)
 
 			if (KEYS["ArrowRight"])
-				BOAT_MAST.model.rotation.y += 0.002 * WORLD.dt
+				BOAT_MAST.model.rotation.y = Math.max(BOAT_MAST.model.rotation.y - 0.002 * WORLD.dt, Math.PI / 2)
 		})
 	</script>
 </body>
