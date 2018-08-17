@@ -66,7 +66,8 @@
 		const gl = space.getContext("webgl")
 		if (!gl) throw new Error("Could not initialie WebGL")
 
-		gl.clearColor(0.8, 0.8, 0.8, 1)
+		let timeColor = 0.5 * (1 + Math.sin(new Date().getTime() * 0.0002))
+		gl.clearColor(timeColor, timeColor, timeColor, 1)
 		gl.clearDepth(1)
 		gl.enable(gl.DEPTH_TEST)
 		gl.depthFunc(gl.LEQUAL)
@@ -91,12 +92,16 @@
 				this.children.forEach(it => it.render(properties, model))
 				gl.uniformMatrix4fv(properties.uModel, false, model)
 
+				let timeColor = 0.5 * (1 + Math.sin(WORLD.time * 0.0002))
+
 				properties.aPosition.set(this.trianglesBuffer, 3)
+				gl.uniform1f(properties.uTimeColor, timeColor)
 				gl.uniform1f(properties.uForward, 0.0)
 				gl.uniform3f(properties.uColor, this.trianglesColor[0], this.trianglesColor[1], this.trianglesColor[2])
 				gl.drawArrays(gl.TRIANGLES, 0, this.trianglesLength)
-				
+
 				properties.aPosition.set(this.linesBuffer, 3)
+				gl.uniform1f(properties.uTimeColor, timeColor)
 				gl.uniform1f(properties.uForward, 0.001)
 				gl.uniform3f(properties.uColor, this.linesColor[0], this.linesColor[1], this.linesColor[2])
 				gl.drawArrays(gl.LINES, 0, this.linesLength)
@@ -364,19 +369,21 @@
 		const FRAGMENT_SHADER = compile(gl.FRAGMENT_SHADER, `
 			precision lowp float;
 			uniform vec3 uColor;
+			uniform float uTimeColor;
 			varying float vDistance;
 
 			void main(void) {
-				float distance = 10.0 * 3.4;
+				float distance = 10.0 * 3.4 * (1.0 + uTimeColor);
 				float state = max(0.0, (distance - vDistance) / distance);
 				state *= state;
-				gl_FragColor = vec4(uColor * state + vec3(0.8, 0.8, 0.8) * (1.0 - state), 1.0);
+				gl_FragColor = vec4(uColor * state + uTimeColor * (1.0 - state), 1.0);
 			}
 		`)
 
 		const MESH_PROGRAM = link(MESH_VERTEX_SHADER, FRAGMENT_SHADER)
 		const MESH_PROGRAM_PROPERTIES = {}
 		MESH_PROGRAM_PROPERTIES.aPosition = new Attribute(MESH_PROGRAM, "aPosition").enable()
+		MESH_PROGRAM_PROPERTIES.uTimeColor = gl.getUniformLocation(MESH_PROGRAM, "uTimeColor")
 		MESH_PROGRAM_PROPERTIES.uColor = gl.getUniformLocation(MESH_PROGRAM, "uColor")
 		MESH_PROGRAM_PROPERTIES.uModel = gl.getUniformLocation(MESH_PROGRAM, "uModel")
 		MESH_PROGRAM_PROPERTIES.uView = gl.getUniformLocation(MESH_PROGRAM, "uView")
@@ -387,6 +394,7 @@
 		const WATER_PROGRAM = link(WATER_VERTEX_SHADER, FRAGMENT_SHADER)
 		const WATER_PROGRAM_PROPERTIES = {}
 		WATER_PROGRAM_PROPERTIES.aPosition = new Attribute(WATER_PROGRAM, "aPosition").enable()
+		WATER_PROGRAM_PROPERTIES.uTimeColor = gl.getUniformLocation(WATER_PROGRAM, "uTimeColor")
 		WATER_PROGRAM_PROPERTIES.uColor = gl.getUniformLocation(WATER_PROGRAM, "uColor")
 		WATER_PROGRAM_PROPERTIES.uModel = gl.getUniformLocation(WATER_PROGRAM, "uModel")
 		WATER_PROGRAM_PROPERTIES.uView = gl.getUniformLocation(WATER_PROGRAM, "uView")
@@ -625,6 +633,8 @@
 			space.height = space.clientHeight
 			gl.viewport(0, 0, space.clientWidth, space.clientHeight)
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+			let timeColor = 0.5 * (1 + Math.sin(WORLD.time * 0.0002))
+			gl.clearColor(timeColor, timeColor, timeColor, 1)
 			gl.useProgram(MESH_PROGRAM)
 			const projection = perspective(deg(90), space.clientWidth / space.clientHeight, 0.1, 100)
 			// const projection = scale(0.3, 0.3, 1).MxM(ortho(space.clientWidth / space.clientHeight, 100))
