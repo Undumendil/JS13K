@@ -647,6 +647,11 @@
 			if (KEYS["d"])
 				BOAT_BODY.model.rotation.y += 0.001 * WORLD.dt
 
+			if (KEYS["w"]){ //temporary
+	        	BOAT_BODY.model.translation.x += 0.05 * Math.sin(BOAT_BODY.model.rotation.y)
+				BOAT_BODY.model.translation.z += 0.05 * Math.cos(BOAT_BODY.model.rotation.y)
+	    	}
+
 			if (KEYS["ArrowLeft"])
 				BOAT_MAST.model.rotation.y = Math.min(BOAT_MAST.model.rotation.y + 0.002 * WORLD.dt, 3 * Math.PI / 2)
 
