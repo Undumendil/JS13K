@@ -66,7 +66,7 @@
 		const gl = space.getContext("webgl")
 		if (!gl) throw new Error("Could not initialie WebGL")
 
-		gl.clearColor(0, 0, 0, 1)
+		gl.clearColor(0.8, 0.8, 0.8, 1)
 		gl.clearDepth(1)
 		gl.enable(gl.DEPTH_TEST)
 		gl.depthFunc(gl.LEQUAL)
@@ -324,10 +324,13 @@
 			uniform mat4 uView;
 			uniform mat4 uProjection;
 			uniform float uForward;
+			uniform vec3 uFogPivot;
+			varying float vDistance;
 
 			void main(void) {
 				gl_Position = uProjection * uView * uModel * vec4(aPosition, 1.0);
 				gl_Position.z -= uForward;
+				vDistance = length((uModel * vec4(aPosition, 1.0)).xyz - uFogPivot);
 			}
 		`)
 
@@ -339,6 +342,8 @@
 			uniform mat4 uProjection;
 			uniform float uForward;
 			uniform float uState;
+			uniform vec3 uFogPivot;
+			varying float vDistance;
 
 			float distortion(vec3 p) {
 				float wave = 5.0;
@@ -352,15 +357,20 @@
 				globalPosition.y += 0.1 * distortion(globalPosition.xyz);
 				gl_Position = uProjection * uView * globalPosition;
 				gl_Position.z -= uForward;
+				vDistance = length((uModel * vec4(aPosition, 1.0)).xyz - uFogPivot);
 			}
 		`)
 
 		const FRAGMENT_SHADER = compile(gl.FRAGMENT_SHADER, `
 			precision lowp float;
 			uniform vec3 uColor;
+			varying float vDistance;
 
 			void main(void) {
-				gl_FragColor = vec4(uColor, 1.0);
+				float distance = 10.0 * 3.4;
+				float state = max(0.0, (distance - vDistance) / distance);
+				state *= state;
+				gl_FragColor = vec4(uColor * state + vec3(0.8, 0.8, 0.8) * (1.0 - state), 1.0);
 			}
 		`)
 
@@ -372,6 +382,7 @@
 		MESH_PROGRAM_PROPERTIES.uView = gl.getUniformLocation(MESH_PROGRAM, "uView")
 		MESH_PROGRAM_PROPERTIES.uProjection = gl.getUniformLocation(MESH_PROGRAM, "uProjection")
 		MESH_PROGRAM_PROPERTIES.uForward = gl.getUniformLocation(MESH_PROGRAM, "uForward")
+		MESH_PROGRAM_PROPERTIES.uFogPivot = gl.getUniformLocation(MESH_PROGRAM, "uFogPivot")
 
 		const WATER_PROGRAM = link(WATER_VERTEX_SHADER, FRAGMENT_SHADER)
 		const WATER_PROGRAM_PROPERTIES = {}
@@ -382,6 +393,7 @@
 		WATER_PROGRAM_PROPERTIES.uProjection = gl.getUniformLocation(WATER_PROGRAM, "uProjection")
 		WATER_PROGRAM_PROPERTIES.uForward = gl.getUniformLocation(WATER_PROGRAM, "uForward")
 		WATER_PROGRAM_PROPERTIES.uState = gl.getUniformLocation(WATER_PROGRAM, "uState")
+		WATER_PROGRAM_PROPERTIES.uFogPivot = gl.getUniformLocation(WATER_PROGRAM, "uFogPivot")
 
 		const CAMERA = new Model()
 		CAMERA.rotation.x = deg(10)
@@ -396,7 +408,7 @@
 
 		document.addEventListener('mousemove', e => {
 			if (CAMERA.isMoving) {
-				//CAMERA.rotation.y = CAMERA.oldY - e.x / 500
+				// CAMERA.rotation.y = CAMERA.oldY - e.x / 500
 				CAMERA.rotation.x = range(deg(10), CAMERA.oldX - e.y / 500, deg(90))
 			}
 		})
@@ -591,8 +603,8 @@
 
 
 		let flip = false
-		for (let k = -3; k < 4; k++) {
-			for (let i = -5; i < 6; i++) {
+		for (let k = -10; k < 11; k++) {
+			for (let i = -10; i < 11; i++) {
 				const WATER_CHUNK = new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, ...CHUNK_VERTICES)
 				WATER_CHUNK.model.rotation.y = flip ? 0 : Math.PI;
 				WATER_CHUNK.model.translation.z = (flip ? 0 : 3.4) + 3.4 * k
@@ -618,6 +630,8 @@
 			// const projection = scale(0.3, 0.3, 1).MxM(ortho(space.clientWidth / space.clientHeight, 100))
 			gl.uniformMatrix4fv(MESH_PROGRAM_PROPERTIES.uProjection, false, projection)
 			gl.uniformMatrix4fv(MESH_PROGRAM_PROPERTIES.uView, false, CAMERA.inverse())
+			gl.uniform3f(MESH_PROGRAM_PROPERTIES.uFogPivot,
+					BOAT_BODY.model.translation.x, BOAT_BODY.model.translation.y, BOAT_BODY.model.translation.z)
 			
 			const empty = mat()
 			WORLD.forEach(it => it.render(MESH_PROGRAM_PROPERTIES, empty))
@@ -626,6 +640,8 @@
 			gl.uniformMatrix4fv(WATER_PROGRAM_PROPERTIES.uProjection, false, projection)
 			gl.uniformMatrix4fv(WATER_PROGRAM_PROPERTIES.uView, false, CAMERA.inverse())
 			gl.uniform1f(WATER_PROGRAM_PROPERTIES.uState, WORLD.time % 2000 / 2000)
+			gl.uniform3f(WATER_PROGRAM_PROPERTIES.uFogPivot,
+					BOAT_BODY.model.translation.x, BOAT_BODY.model.translation.y, BOAT_BODY.model.translation.z)
 
 			WATER.forEach(it => it.render(WATER_PROGRAM_PROPERTIES, empty))
 
@@ -641,21 +657,20 @@
 			const boat = Math.sin(WORLD.time % 5000 / 2500 * Math.PI)
 			BOAT_BODY.model.rotation.z = boat / 10
 
-			if (KEYS["a"]){
+			if (KEYS["a"]) {
 				BOAT_BODY.model.rotation.y -= 0.001 * WORLD.dt
 				CAMERA.rotation.y = BOAT_BODY.model.rotation.y
 			}
 
-			if (KEYS["d"]){
+			if (KEYS["d"]) {
 				BOAT_BODY.model.rotation.y += 0.001 * WORLD.dt
 				CAMERA.rotation.y = BOAT_BODY.model.rotation.y
 			}
 
-			if (KEYS["w"]){ //temporary
-	        	BOAT_BODY.model.translation.x += 0.05 * Math.sin(BOAT_BODY.model.rotation.y)
+			if (KEYS["w"]) { // temporary
+				BOAT_BODY.model.translation.x += 0.05 * Math.sin(BOAT_BODY.model.rotation.y)
 				BOAT_BODY.model.translation.z += 0.05 * Math.cos(BOAT_BODY.model.rotation.y)
-				CAMERA.translation = BOAT_BODY.model.translation
-	    	}
+			}
 
 			if (KEYS["ArrowLeft"])
 				BOAT_MAST.model.rotation.y = Math.min(BOAT_MAST.model.rotation.y + 0.002 * WORLD.dt, 3 * Math.PI / 2)
