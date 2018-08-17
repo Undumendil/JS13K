@@ -396,7 +396,7 @@
 
 		document.addEventListener('mousemove', e => {
 			if (CAMERA.isMoving) {
-				CAMERA.rotation.y = CAMERA.oldY - e.x / 500
+				//CAMERA.rotation.y = CAMERA.oldY - e.x / 500
 				CAMERA.rotation.x = range(deg(10), CAMERA.oldX - e.y / 500, deg(90))
 			}
 		})
@@ -641,15 +641,20 @@
 			const boat = Math.sin(WORLD.time % 5000 / 2500 * Math.PI)
 			BOAT_BODY.model.rotation.z = boat / 10
 
-			if (KEYS["a"])
+			if (KEYS["a"]){
 				BOAT_BODY.model.rotation.y -= 0.001 * WORLD.dt
+				CAMERA.rotation.y = BOAT_BODY.model.rotation.y
+			}
 
-			if (KEYS["d"])
+			if (KEYS["d"]){
 				BOAT_BODY.model.rotation.y += 0.001 * WORLD.dt
+				CAMERA.rotation.y = BOAT_BODY.model.rotation.y
+			}
 
 			if (KEYS["w"]){ //temporary
 	        	BOAT_BODY.model.translation.x += 0.05 * Math.sin(BOAT_BODY.model.rotation.y)
 				BOAT_BODY.model.translation.z += 0.05 * Math.cos(BOAT_BODY.model.rotation.y)
+				CAMERA.translation = BOAT_BODY.model.translation
 	    	}
 
 			if (KEYS["ArrowLeft"])
