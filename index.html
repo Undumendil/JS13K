@@ -81,16 +81,16 @@
 
 			total() {
 				return scale(this.scale.x, this.scale.y, this.scale.z)
-						.MxM(translate(this.offset.x, this.offset.y, this.offset.z))
-						.MxM(rotate(this.rotation.y, this.rotation.x, this.rotation.z))
-						.MxM(translate(this.translation.x, this.translation.y, this.translation.z))
+						.x(translate(this.offset.x, this.offset.y, this.offset.z))
+						.x(rotate(this.rotation.y, this.rotation.x, this.rotation.z))
+						.x(translate(this.translation.x, this.translation.y, this.translation.z))
 			}
 
 			inverse() {
 				return translate(-this.translation.x, -this.translation.y, -this.translation.z)
-						.MxM(rotate(-this.rotation.y, -this.rotation.x, -this.rotation.z, true))
-						.MxM(translate(-this.offset.x, -this.offset.y, -this.offset.z))
-						.MxM(scale(1 / this.scale.x, 1 / this.scale.y, 1 / this.scale.z))
+						.x(rotate(-this.rotation.y, -this.rotation.x, -this.rotation.z, true))
+						.x(translate(-this.offset.x, -this.offset.y, -this.offset.z))
+						.x(scale(1 / this.scale.x, 1 / this.scale.y, 1 / this.scale.z))
 			}
 		}
 
@@ -109,7 +109,7 @@
 			}
 
 			render(properties, parentModel) {
-				const model = this.total().MxM(parentModel)
+				const model = this.total().x(parentModel)
 				this.children.forEach(it => it.render(properties, model))
 				gl.uniformMatrix4fv(properties.uModel, false, model)
 
@@ -149,37 +149,15 @@
 			}
 		}
 
-		Array.prototype.MxM = function(m) {
-			const out = new Array(16)
+		Array.prototype.x = function(m) {
+			const out = []
 			for (let i = 0; i < 4; i++)
-				for (let j = 0; j < 4; j++) {
+				for (let j = 0; j < this.length / 4; j++) {
 					out[j * 4 + i] = 0
 					for (let k = 0; k < 4; k++)
 						out[j * 4 + i] += m[i + k * 4] * this[j * 4 + k]
 				}
 			return out
-		}
-
-		Array.prototype.VxM = function(m) {
-			return [
-				m[0] * this[0] + m[4] * this[1] +  m[8] * this[2] + m[12] * this[3],
-				m[1] * this[0] + m[5] * this[1] +  m[9] * this[2] + m[13] * this[3],
-				m[2] * this[0] + m[6] * this[1] + m[10] * this[2] + m[14] * this[3],
-				m[3] * this[0] + m[7] * this[1] + m[11] * this[2] + m[15] * this[3]
-			]
-		}
-
-		Array.prototype.VxV = function(v) {
-			return [
-				this[2] * v[1] - this[1] * v[2],
-				this[0] * v[2] - this[2] * v[0],
-				this[1] * v[0] - this[0] * v[1],
-				0
-			]
-		}
-
-		Array.prototype.VminusV = function(v) {
-			return [ this[0] - v[0], this[1] - v[1], this[2] - v[2] ]
 		}
 
 		function mat(x = 0, y = 0, z = 0, a = 1, b = 1, c = 1, d = 0, e = 1) {
@@ -223,7 +201,7 @@
 				0,             0,            1, 0,
 				0,             0,            0, 1,
 			]
-			return inverse ? rotY.MxM(rotX).MxM(rotZ) : rotZ.MxM(rotX).MxM(rotY)
+			return inverse ? rotY.x(rotX).x(rotZ) : rotZ.x(rotX).x(rotY)
 		}
 
 		function compile(type, source) {
@@ -684,7 +662,7 @@
 			gl.clearColor(WORLD.timeColor, WORLD.timeColor, WORLD.timeColor, 1)
 			gl.useProgram(MESH_PROGRAM)
 			const projection = perspective(deg(90), space.clientWidth / space.clientHeight, 0.1, 100)
-			// const projection = scale(0.3, 0.3, 1).MxM(ortho(space.clientWidth / space.clientHeight, 100))
+			// const projection = scale(0.3, 0.3, 1).x(ortho(space.clientWidth / space.clientHeight, 100))
 			gl.uniformMatrix4fv(MESH_PROGRAM_PROPERTIES.uProjection, false, projection)
 			gl.uniformMatrix4fv(MESH_PROGRAM_PROPERTIES.uView, false, CAMERA.inverse())
 			gl.uniform3f(MESH_PROGRAM_PROPERTIES.uFogPivot,
