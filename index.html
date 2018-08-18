@@ -459,55 +459,57 @@
 		const UPDATES = []
 		WORLD.time = new Date().getTime()
 
+		const sqrt3 = Math.sqrt(3)
+		const CHUNK_SIDE = 4
 		const WATER_TRIANGLES_COLOR = 0
 		const WATER_LINES_COLOR = 1
 		const WATER_VERTICES = [
-			-2, 0,   0,
-			 0, 0,   0,
-			-1, 0, 1.7,
-			 0, 0,   0,
-			 2, 0,   0,
-			 1, 0, 1.7,
-			-1, 0, 1.7,
-			 1, 0, 1.7,
-			 0, 0, 3.4,
-			 0, 0,   0,
-			 1, 0, 1.7,
-			-1, 0, 1.7,
+			-CHUNK_SIDE / 2, 0, 0,
+			 0,              0, 0,
+			-CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
+			 0,              0, 0,
+			 CHUNK_SIDE / 2, 0, 0,
+			 CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
+			-CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
+			 CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
+			 0,              0, CHUNK_SIDE * sqrt3 / 2,
+			 0,              0, 0,
+			 CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
+			-CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
 		]
 		const GRASS_TRIANGLES_COLOR = 2
 		const GRASS_LINES_COLOR = 3
 		const CHUNK_VERTICES = [
-			-2, -0.2,   0,
- 			 0, -0.2,   0,
- 			-1, 0.4, 0.57,
-			-2, -0.2,   0,
- 			-1, 0.4, 0.57,
- 			-1, -0.2, 1.7,
- 			-1, 0.4, 0.57,
- 			 0, -0.2,   0,
- 			 1, 0.4, 0.57,
- 			 0, -0.2,   0,
-			 2, -0.2,   0,
- 			 1, 0.4, 0.57,
- 			 1, 0.4, 0.57,
-			 2, -0.2,   0,
- 			 1, -0.2, 1.7,
- 			 1, 0.4, 0.57,
- 			 1, -0.2, 1.7,
-			 0, 0.4, 2.83,
-			 0, 0.4, 2.83,
- 			 1, -0.2, 1.7,
-			 0, -0.2, 3.4,
-			 0, -0.2, 3.4,
- 			-1, -0.2, 1.7,
-			 0, 0.4, 2.83,
- 			-1, -0.2, 1.7,
- 			-1, 0.4, 0.57,
-			 0, 0.4, 2.83,
- 			-1, 0.4, 0.57,
- 			 1, 0.4, 0.57,
-			 0, 0.4, 2.83,
+			-CHUNK_SIDE / 2, -0.2, 0,
+ 			 0,              -0.2, 0,
+ 			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			-CHUNK_SIDE / 2, -0.2, 0,
+ 			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+ 			-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+ 			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+ 			 0,              -0.2, 0,
+ 			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+ 			 0,              -0.2, 0,
+			 CHUNK_SIDE / 2, -0.2, 0,
+ 			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+ 			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			 CHUNK_SIDE / 2, -0.2, 0,
+ 			 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+ 			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+ 			 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+			 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
+			 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
+ 			 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+			 0,              -0.2, CHUNK_SIDE * sqrt3 / 2,
+			 0,              -0.2, CHUNK_SIDE * sqrt3 / 2,
+ 			-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+			 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
+ 			-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+ 			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
+ 			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+ 			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
 		]
 
 		const BOAT_BODY = new Mesh(4, 5,
@@ -654,8 +656,8 @@
 			for (let i = -10; i < 11; i++) {
 				const WATER_CHUNK = new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, ...WATER_VERTICES)
 				WATER_CHUNK.rotation.y = flip ? 0 : Math.PI;
-				WATER_CHUNK.translation.z = (flip ? 0 : 3.4) + 3.4 * k
-				WATER_CHUNK.translation.x = i * 2
+				WATER_CHUNK.translation.z = (flip ? 0 : CHUNK_SIDE * sqrt3 / 2) + CHUNK_SIDE * sqrt3 / 2 * k
+				WATER_CHUNK.translation.x = i * CHUNK_SIDE / 2
 				WATER.push(WATER_CHUNK)
 				flip = !flip
 			}
