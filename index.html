@@ -113,18 +113,16 @@
 				this.children.forEach(it => it.render(properties, model))
 				gl.uniformMatrix4fv(properties.uModel, false, model)
 
-				const trianglesColor = this.trianglesColor()
 				properties.aPosition.set(this.trianglesBuffer, 3)
 				gl.uniform1f(properties.uTimeColor, WORLD.timeColor)
 				gl.uniform1f(properties.uForward, 0.0)
-				gl.uniform3f(properties.uColor, trianglesColor[0], trianglesColor[1], trianglesColor[2])
+				gl.uniform1i(properties.uColor, this.trianglesColor)
 				gl.drawArrays(gl.TRIANGLES, 0, this.trianglesLength)
 
-				const linesColor = this.linesColor()
 				properties.aPosition.set(this.linesBuffer, 3)
 				gl.uniform1f(properties.uTimeColor, WORLD.timeColor)
 				gl.uniform1f(properties.uForward, 0.001)
-				gl.uniform3f(properties.uColor, linesColor[0], linesColor[1], linesColor[2])
+				gl.uniform1i(properties.uColor, this.linesColor)
 				gl.drawArrays(gl.LINES, 0, this.linesLength)
 			}
 		}
@@ -352,7 +350,7 @@
 				float wave = 5.0;
 				float x = (p.x / wave + uState) * 2.0 * 3.14;
 				float z = (p.z / wave + uState) * 2.0 * 3.14;
-				return 1.2 * (sin(x) + cos(z));
+				return 1.1 * (sin(x) + cos(z));
 			}
 
 			void main(void) {
@@ -366,15 +364,35 @@
 
 		const FRAGMENT_SHADER = compile(gl.FRAGMENT_SHADER, `
 			precision lowp float;
-			uniform vec3 uColor;
+			uniform int uColor;
 			uniform float uTimeColor;
 			varying float vDistance;
+
+			vec3 getColor(){
+				if (uColor == 0) //WATER_TRIANGLES_COLOR
+					return vec3(0.0, 1.0 - 0.8 * uTimeColor, 0.9 - 0.7 * uTimeColor);
+				if (uColor == 1) //WATER_LINES_COLOR
+					return vec3(0.0, 0.6 - 0.5 * uTimeColor, 0.5 - 0.4 * uTimeColor);
+				if (uColor == 2) //GRASS_TRIANGLES_COLOR
+					return vec3(0.3 - 0.1 * uTimeColor, 0.8 - 0.2 * uTimeColor, 0.3 - 0.1 * uTimeColor);
+				if (uColor == 3) //GRASS_LINES_COLOR
+					return vec3(0.2 - 0.1 * uTimeColor, 0.5 - 0.2 * uTimeColor, 0.2 - 0.1 * uTimeColor);
+				if (uColor == 4 || uColor == 6) //BOAT_BODY_TRIANGLES_COLOR; BOAT_MAST_TRIANGLES_COLOR
+					return vec3(0.6 - 0.3 * uTimeColor, 0.5 - 0.2 * uTimeColor, 0.4 - 0.2 * uTimeColor);
+				if (uColor == 5 || uColor == 7) //BOAT_BODY_LINES_COLOR; BOAT_MAST_LINES_COLOR
+					return vec3(0.5 - 0.3 * uTimeColor, 0.4 - 0.2 * uTimeColor, 0.3 - 0.1 * uTimeColor);
+				if (uColor == 8) //BOAT_SAIL_TRIANGLES_COLOR
+					return vec3(1.0 - 0.3 * uTimeColor, 1.0 - 0.3 * uTimeColor, 1.0 - 0.3 * uTimeColor);
+				if (uColor == 9) //BOAT_SAIL_LINES_COLOR
+					return vec3(0.6 - 0.2 * uTimeColor, 0.6 - 0.2 * uTimeColor, 0.6 - 0.2 * uTimeColor);
+				return vec3(0.0, 0.0, 0.0);
+			}
 
 			void main(void) {
 				float distance = 10.0 * 3.4 * (1.0 + uTimeColor);
 				float state = max(0.0, (distance - vDistance) / distance);
 				state *= state;
-				gl_FragColor = vec4(uColor * state + uTimeColor * (1.0 - state), 1.0);
+				gl_FragColor = vec4(getColor() * state + uTimeColor * (1.0 - state), 1.0);
 			}
 		`)
 
@@ -441,8 +459,8 @@
 		const UPDATES = []
 		WORLD.time = new Date().getTime()
 
-		const WATER_TRIANGLES_COLOR = () => [0, 1 - 0.8 * WORLD.timeColor, 0.9 - 0.7 * WORLD.timeColor] // [0.6, 0.6, 1]
-		const WATER_LINES_COLOR = () => [0, 0.6 - 0.5 * WORLD.timeColor, 0.5 - 0.4 * WORLD.timeColor] //[0.4, 0.4, 0.7]
+		const WATER_TRIANGLES_COLOR = 0
+		const WATER_LINES_COLOR = 1
 		const WATER_VERTICES = [
 			-2, 0,   0,
 			 0, 0,   0,
@@ -457,44 +475,42 @@
 			 1, 0, 1.7,
 			-1, 0, 1.7,
 		]
-		const GRASS_TRIANGLES_COLOR = () => [0.3, 0.8, 0.3]
-		const GRASS_LINES_COLOR = () => [0.2, 0.5, 0.2]
-		const CHUKN_VERTICES = [
-			-2, 0,   0,
- 			 0, 0,   0,
- 			-1, 0, 0.57,
-			-2, 0,   0,
- 			-1, 0, 0.57,
- 			-1, 0, 1.7,
- 			-1, 0, 0.57,
- 			 0, 0,   0,
- 			 1, 0, 0.57,
- 			 0, 0,   0,
-			 2, 0,   0,
- 			 1, 0, 0.57,
- 			 1, 0, 0.57,
-			 2, 0,   0,
- 			 1, 0, 1.7,
- 			 1, 0, 0.57,
- 			 1, 0, 1.7,
-			 0, 0, 2.83,
-			 0, 0, 2.83,
- 			 1, 0, 1.7,
-			 0, 0, 3.4,
-			 0, 0, 3.4,
- 			-1, 0, 1.7,
-			 0, 0, 2.83,
- 			-1, 0, 1.7,
- 			-1, 0, 0.57,
-			 0, 0, 2.83,
- 			-1, 0, 0.57,
- 			 1, 0, 0.57,
-			 0, 0, 2.83,
+		const GRASS_TRIANGLES_COLOR = 2
+		const GRASS_LINES_COLOR = 3
+		const CHUNK_VERTICES = [
+			-2, -0.2,   0,
+ 			 0, -0.2,   0,
+ 			-1, 0.4, 0.57,
+			-2, -0.2,   0,
+ 			-1, 0.4, 0.57,
+ 			-1, -0.2, 1.7,
+ 			-1, 0.4, 0.57,
+ 			 0, -0.2,   0,
+ 			 1, 0.4, 0.57,
+ 			 0, -0.2,   0,
+			 2, -0.2,   0,
+ 			 1, 0.4, 0.57,
+ 			 1, 0.4, 0.57,
+			 2, -0.2,   0,
+ 			 1, -0.2, 1.7,
+ 			 1, 0.4, 0.57,
+ 			 1, -0.2, 1.7,
+			 0, 0.4, 2.83,
+			 0, 0.4, 2.83,
+ 			 1, -0.2, 1.7,
+			 0, -0.2, 3.4,
+			 0, -0.2, 3.4,
+ 			-1, -0.2, 1.7,
+			 0, 0.4, 2.83,
+ 			-1, -0.2, 1.7,
+ 			-1, 0.4, 0.57,
+			 0, 0.4, 2.83,
+ 			-1, 0.4, 0.57,
+ 			 1, 0.4, 0.57,
+			 0, 0.4, 2.83,
 		]
 
-		const BOAT_BODY = new Mesh(
-			() => [0.6, 0.5, 0.4],
-			() => [0.5, 0.4, 0.3],
+		const BOAT_BODY = new Mesh(4, 5,
 			0.0, -0.9, -2.6,
 			0.0, 1.0, -3.4,
 			-1.6, 1.0, 0.0,
@@ -539,9 +555,7 @@
 		BOAT_BODY.scale.z = 0.25
 		WORLD.push(BOAT_BODY)
 
-		const BOAT_MAST = new Mesh(
-			() => [0.6, 0.5, 0.4],
-			() => [0.5, 0.4, 0.3],
+		const BOAT_MAST = new Mesh(6, 7,
 			0.1, 6.0, 0.0,
 			0.1, 0.9, 0.0,
 			0.0, 0.9, 0.1,
@@ -618,9 +632,7 @@
 		BOAT_BODY.children.push(BOAT_MAST)
 		BOAT_MAST.rotation.y = 3 * Math.PI / 4
 
-		const BOAT_SAIL = new Mesh(
-			() => [1, 1, 1], 
-			() => [0.6, 0.6, 0.6],
+		const BOAT_SAIL = new Mesh(8, 9,
 			-0.1, 2.3, 1.5,
 			0.0, 1.4, 0.1,
 			0.0, 6.0, 0.1,
@@ -637,22 +649,22 @@
 
 		const BOAT_MOTION = new Model()
 
-		// let flip = false
-		// for (let k = -10; k < 11; k++) {
-		// 	for (let i = -10; i < 11; i++) {
-		// 		const WATER_CHUNK = new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, ...WATER_VERTICES)
-		// 		WATER_CHUNK.model.rotation.y = flip ? 0 : Math.PI;
-		// 		WATER_CHUNK.model.translation.z = (flip ? 0 : 3.4) + 3.4 * k
-		// 		WATER_CHUNK.model.translation.x = i * 2
-		// 		WATER.push(WATER_CHUNK)
-		// 		flip = !flip
-		// 	}
-		// }
+		let flip = false
+		for (let k = -10; k < 11; k++) {
+			for (let i = -10; i < 11; i++) {
+				const WATER_CHUNK = new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, ...WATER_VERTICES)
+				WATER_CHUNK.rotation.y = flip ? 0 : Math.PI;
+				WATER_CHUNK.translation.z = (flip ? 0 : 3.4) + 3.4 * k
+				WATER_CHUNK.translation.x = i * 2
+				WATER.push(WATER_CHUNK)
+				flip = !flip
+			}
+		}
 
-		const WATER_CHUNK = new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, ...WATER_VERTICES)
-		WATER.push(WATER_CHUNK)
+		//const WATER_CHUNK = new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, ...WATER_VERTICES)
+		//WATER.push(WATER_CHUNK)
 
-		const GRASS_CHUNK = new Mesh(GRASS_TRIANGLES_COLOR, GRASS_LINES_COLOR, ...CHUKN_VERTICES)
+		const GRASS_CHUNK = new Mesh(GRASS_TRIANGLES_COLOR, GRASS_LINES_COLOR, ...CHUNK_VERTICES)
 		GRASS_CHUNK.translation.x -= 4
 		WORLD.push(GRASS_CHUNK)
 
@@ -660,7 +672,7 @@
 			const newTime = new Date().getTime()
 			WORLD.dt = newTime - WORLD.time
 			WORLD.time = newTime
-			WORLD.timeColor = 0.5 * (1 + Math.sin(WORLD.time * 0.0002))
+			WORLD.timeColor = (0.618 + Math.sign((WORLD.time / 5000) % 4 - 2) * (Math.sqrt(1.25 - Math.pow((WORLD.time / 5000) % 2 - 1, 2)) - 0.5)) / 1.236
 			UPDATES.forEach(it => it())
 
 			space.width = space.clientWidth
@@ -703,6 +715,12 @@
 				BOAT_MOTION.rotation.y *= Math.pow(0.95, WORLD.dt / 16)
 			}
 			let speed = Math.sqrt((BOAT_MOTION.translation.x * BOAT_MOTION.translation.x + BOAT_MOTION.translation.z * BOAT_MOTION.translation.z))
+			if (KEYS["s"]){
+				BOAT_MOTION.translation.x *= Math.pow(0.999, WORLD.dt / 10)
+				BOAT_MOTION.translation.z *= Math.pow(0.999, WORLD.dt / 10)
+				speed *= Math.pow(0.98, WORLD.dt / 10)
+				BOAT_MOTION.rotation.y *= Math.pow(1.001, WORLD.dt * speed * 10)
+			}
 			BOAT_MOTION.translation.x += 0.0005 * Math.sin(BOAT_BODY.rotation.y) * WORLD.dt * speed
 			BOAT_MOTION.translation.z += 0.0005 * Math.cos(BOAT_BODY.rotation.y) * WORLD.dt * speed
 			const speedRatio = Math.sqrt((BOAT_MOTION.translation.x * BOAT_MOTION.translation.x + BOAT_MOTION.translation.z * BOAT_MOTION.translation.z) / 0.003)
