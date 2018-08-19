@@ -15,42 +15,20 @@
 
 		p {
 			position: absolute;
-			font-size: 30px;
-			font-weight: bold;
-			font-family: Verdana;
-			margin: 20px;
 			padding: 10px;
+			margin: 20px;
+			color: #dcdcdc;
 			border-radius: 7px;
-			color: rgb(220, 220, 220);
-			background: rgb(128, 128, 128);
+			font: bold 30px Verdana;
+			background: #808080;
 			opacity: 0.4;
 		}
 
-		#anchor {
-			bottom: 0;
-			left: 0;
-		}
-
-		#rotate_sail {
-			right: 0;
-			top: 0;
-		}
-
-		#enable_sail {
-			bottom: 0;
-			right: 0;
-		}
-
-		#turn {
-			left: 0;
-			top: 0;
-		}
-
-		#centreboat {
-			top: 50%;
-			left: 0;
-			transform: translateY(-50%);
-		}
+		#turn { top: 0; left: 0; }
+		#anchor { bottom: 0; left: 0; }
+		#rotate_sail { top: 0; right: 0; }
+		#enable_sail { bottom: 0; right: 0; }
+		#centreboard { top: 50%; left: 0; transform: translateY(-50%); }
 	</style>
 </head>
 
@@ -60,7 +38,7 @@
 	<p id="rotate_sail">&#10227; &#10094;&#129106;&#10095;<br>&#10226; &#10094;&#129104;&#10095;</p>
 	<p id="enable_sail">&#9654; &#10094;E&#10095;</p>
 	<p id="turn">&#10094;A&#10095; &#8630;<br>&#10094;D&#10095; &#8631;</p>
-	<p id="centreboat">&#10094;W&#10095; &#9724;</p>
+	<p id="centreboard">&#10094;W&#10095; &#9724;</p>
 
 	<script>
 		const gl = space.getContext("webgl")
@@ -135,6 +113,7 @@
 			set(buffer, size) {
 				gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
 				gl.vertexAttribPointer(this.attrib, size, gl.FLOAT, false, 0, 0)
+				gl.bindBuffer(gl.ARRAY_BUFFER, null)
 				return this
 			}
 
@@ -328,12 +307,12 @@
 				float wave = 5.0;
 				float x = (p.x / wave + uState) * 2.0 * 3.14;
 				float z = (p.z / wave + uState) * 2.0 * 3.14;
-				return 1.1 * (sin(x) + cos(z));
+				return 0.11 * (sin(x) + cos(z));
 			}
 
 			void main(void) {
 				vec4 globalPosition = uModel * vec4(aPosition, 1.0);
-				globalPosition.y += 0.1 * distortion(globalPosition.xyz);
+				globalPosition.y += distortion(globalPosition.xyz);
 				gl_Position = uProjection * uView * globalPosition;
 				gl_Position.z -= uForward;
 				vDistance = length((uModel * vec4(aPosition, 1.0)).xyz - uFogPivot);
@@ -359,7 +338,7 @@
 					return vec3(0.6 - 0.3 * uTimeColor, 0.5 - 0.2 * uTimeColor, 0.4 - 0.2 * uTimeColor);
 				if (uColor == 5 || uColor == 7) //BOAT_BODY_LINES_COLOR; BOAT_MAST_LINES_COLOR
 					return vec3(0.5 - 0.3 * uTimeColor, 0.4 - 0.2 * uTimeColor, 0.3 - 0.1 * uTimeColor);
-				if (uColor == 8) //BOAT_SAIL_TRIANGLES_COLOR
+				if (uColor == 8) //BOAT_SAIL_POINTS_COLOR
 					return vec3(1.0 - 0.3 * uTimeColor, 1.0 - 0.3 * uTimeColor, 1.0 - 0.3 * uTimeColor);
 				if (uColor == 9) //BOAT_SAIL_LINES_COLOR
 					return vec3(0.6 - 0.2 * uTimeColor, 0.6 - 0.2 * uTimeColor, 0.6 - 0.2 * uTimeColor);
@@ -459,34 +438,34 @@
 		const GRASS_LINES_COLOR = 3
 		const CHUNK_VERTICES = [
 			-CHUNK_SIDE / 2, -0.2, 0,
- 			 0,              -0.2, 0,
- 			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			 0,              -0.2, 0,
+			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
 			-CHUNK_SIDE / 2, -0.2, 0,
- 			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
- 			-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
- 			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
- 			 0,              -0.2, 0,
- 			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
- 			 0,              -0.2, 0,
+			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			 0,              -0.2, 0,
+			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			 0,              -0.2, 0,
 			 CHUNK_SIDE / 2, -0.2, 0,
- 			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
- 			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
 			 CHUNK_SIDE / 2, -0.2, 0,
- 			 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
- 			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
- 			 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+			 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
 			 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
 			 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
- 			 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+			 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
 			 0,              -0.2, CHUNK_SIDE * sqrt3 / 2,
 			 0,              -0.2, CHUNK_SIDE * sqrt3 / 2,
- 			-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+			-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
 			 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
- 			-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
- 			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
+			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
 			 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
- 			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
- 			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
+			 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
 			 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
 		]
 
@@ -624,8 +603,7 @@
 			0.0, 1.4, 3.9,
 		)
 		BOAT_MAST.children.push(BOAT_SAIL)
-		const BOAT_SAIL_TRIANGLES = [0, 4, 6]
-		const BOAT_SAIL_LINES = [0, 4, 6]
+		const BOAT_SAIL_POINTS = [0, 4, 6]
 
 		const BOAT_MOTION = new Model()
 
@@ -655,20 +633,22 @@
 			WORLD.timeColor = (0.618 + Math.sign((WORLD.time / 5000) % 4 - 2) * (Math.sqrt(1.25 - Math.pow((WORLD.time / 5000) % 2 - 1, 2)) - 0.5)) / 1.236
 			UPDATES.forEach(it => it())
 
+			const empty = mat()
+			const projection = perspective(deg(90), space.clientWidth / space.clientHeight, 0.1, 100)
+			// const projection = scale(0.3, 0.3, 1).x(ortho(space.clientWidth / space.clientHeight, 100))
+
 			space.width = space.clientWidth
 			space.height = space.clientHeight
 			gl.viewport(0, 0, space.clientWidth, space.clientHeight)
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 			gl.clearColor(WORLD.timeColor, WORLD.timeColor, WORLD.timeColor, 1)
+
 			gl.useProgram(MESH_PROGRAM)
-			const projection = perspective(deg(90), space.clientWidth / space.clientHeight, 0.1, 100)
-			// const projection = scale(0.3, 0.3, 1).x(ortho(space.clientWidth / space.clientHeight, 100))
 			gl.uniformMatrix4fv(MESH_PROGRAM_PROPERTIES.uProjection, false, projection)
 			gl.uniformMatrix4fv(MESH_PROGRAM_PROPERTIES.uView, false, CAMERA.inverse())
 			gl.uniform3f(MESH_PROGRAM_PROPERTIES.uFogPivot,
 					BOAT_BODY.translation.x, BOAT_BODY.translation.y, BOAT_BODY.translation.z)
 			
-			const empty = mat()
 			WORLD.forEach(it => it.render(MESH_PROGRAM_PROPERTIES, empty))
 
 			gl.useProgram(WATER_PROGRAM)
@@ -728,8 +708,8 @@
 
 		UPDATES.push(() => {
 			const sail = Math.sin(WORLD.time % 3000 / 1500 * Math.PI)
-			modifyArrayBuffer(BOAT_SAIL.trianglesBuffer, BOAT_SAIL_TRIANGLES, [-0.1 + sail, 2.3, 1.5])
-			modifyArrayBuffer(BOAT_SAIL.linesBuffer, BOAT_SAIL_LINES, [-0.1 + sail, 2.3, 1.5])
+			modifyArrayBuffer(BOAT_SAIL.trianglesBuffer, BOAT_SAIL_POINTS, [sail, 2.3, 1.5])
+			modifyArrayBuffer(BOAT_SAIL.linesBuffer, BOAT_SAIL_POINTS, [sail, 2.3, 1.5])
 		})
 	</script>
 </body>
