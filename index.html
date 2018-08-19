@@ -183,6 +183,8 @@
 			return inverse ? rotY.x(rotX).x(rotZ) : rotZ.x(rotX).x(rotY)
 		}
 
+		const marineCos = (arg) => Math.cos(BOAT_MAST.rotation.y) < 0.5 ? Math.sign(Math.cos(arg)) : Math.cos(arg) //Not ready yet
+
 		function compile(type, source) {
 			let shader = gl.createShader(type)
 			gl.shaderSource(shader, source)
@@ -307,7 +309,7 @@
 				float wave = 5.0;
 				float x = (p.x / wave + uState) * 2.0 * 3.14;
 				float z = (p.z / wave + uState) * 2.0 * 3.14;
-				return 0.11 * (sin(x) + cos(z));
+				return 0.1 * (sin(x) + cos(z));
 			}
 
 			void main(void) {
@@ -508,6 +510,7 @@
 			1.6, 1.0, 0.0,
 		)
 		CAMERA.translation = BOAT_BODY.translation
+		BOAT_BODY.rotation.x = -Math.PI / 24
 		BOAT_BODY.rotation.z = Math.PI / 18
 		BOAT_BODY.scale.x = 0.25
 		BOAT_BODY.scale.y = 0.25
@@ -589,7 +592,7 @@
 			0.1, 1.3, 0.0,
 		)
 		BOAT_BODY.children.push(BOAT_MAST)
-		BOAT_MAST.rotation.y = 3 * Math.PI / 4
+		BOAT_MAST.rotation.y = Math.PI
 
 		const BOAT_SAIL = new Mesh(8, 9,
 			-0.1, 2.3, 1.5,
@@ -606,6 +609,10 @@
 		const BOAT_SAIL_POINTS = [0, 4, 6]
 
 		const BOAT_MOTION = new Model()
+		const CURRENT_WIND = new Model()
+		const MAX_FLOW_FORCE = 2
+		CURRENT_WIND.translation.x = 2
+		CURRENT_WIND.rotation.y = Math.PI / 2
 
 		let flip = false
 		for (let k = -10; k < 11; k++) {
@@ -618,9 +625,6 @@
 				flip = !flip
 			}
 		}
-
-		//const WATER_CHUNK = new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, ...WATER_VERTICES)
-		//WATER.push(WATER_CHUNK)
 
 		const GRASS_CHUNK = new Mesh(GRASS_TRIANGLES_COLOR, GRASS_LINES_COLOR, ...CHUNK_VERTICES)
 		GRASS_CHUNK.translation.x -= 4
@@ -664,42 +668,45 @@
 		})
 
 		UPDATES.push(() => {
-			BOAT_MOTION.rotation.y *= Math.pow(0.95, WORLD.dt / 16)
-			BOAT_MOTION.translation.x *= Math.pow(0.99, WORLD.dt / 10)
-			BOAT_MOTION.translation.z *= Math.pow(0.99, WORLD.dt / 10)
+			BOAT_MOTION.rotation.x *= Math.pow(0.99, 1 + 10000 * Math.abs(BOAT_MOTION.rotation.x))
+			BOAT_MOTION.rotation.y *= Math.pow(0.99, 1 + 10000 * Math.abs(BOAT_MOTION.rotation.y))
+			BOAT_MOTION.rotation.z *= Math.pow(0.99, 1 + 10000 * Math.abs(BOAT_MOTION.rotation.z))
+			BOAT_MOTION.translation.x *= Math.pow(0.99, 1 + 10 * Math.abs(BOAT_MOTION.translation.x))
+			BOAT_MOTION.translation.z *= Math.pow(0.99, 1 + 10 * Math.abs(BOAT_MOTION.translation.z))
 
-			BOAT_MOTION.rotation.z += -Math.sin(BOAT_BODY.rotation.z) / 1000
+			BOAT_MOTION.rotation.x += -Math.sin(BOAT_BODY.rotation.x) / 15013
+			BOAT_MOTION.rotation.z += -Math.sin(BOAT_BODY.rotation.z) / 10037
 			if (KEYS["w"]) {
-				BOAT_MOTION.translation.x += 0.00008 * Math.sin(BOAT_BODY.rotation.y) * WORLD.dt
-				BOAT_MOTION.translation.z += 0.00008 * Math.cos(BOAT_BODY.rotation.y) * WORLD.dt
-				BOAT_MOTION.rotation.y *= Math.pow(0.95, WORLD.dt / 16)
+				BOAT_MOTION.translation.x += 0.00003 * Math.sin(BOAT_BODY.rotation.y)
+				BOAT_MOTION.translation.z += 0.00003 * Math.cos(BOAT_BODY.rotation.y)
+				BOAT_MOTION.rotation.y *= 0.95
 			}
 			let speed = Math.sqrt((BOAT_MOTION.translation.x * BOAT_MOTION.translation.x + BOAT_MOTION.translation.z * BOAT_MOTION.translation.z))
 			if (KEYS["s"]){
-				BOAT_MOTION.translation.x *= Math.pow(0.999, WORLD.dt / 10)
-				BOAT_MOTION.translation.z *= Math.pow(0.999, WORLD.dt / 10)
-				speed *= Math.pow(0.98, WORLD.dt / 10)
-				BOAT_MOTION.rotation.y *= Math.pow(1.001, WORLD.dt * speed * 10)
+				BOAT_MOTION.translation.x *= 0.99
+				BOAT_MOTION.translation.z *= 0.99
+				speed *= 0.99
+				BOAT_MOTION.rotation.y *= Math.pow(1.001, speed * 10)
 			}
-			BOAT_MOTION.translation.x += 0.0005 * Math.sin(BOAT_BODY.rotation.y) * WORLD.dt * speed
-			BOAT_MOTION.translation.z += 0.0005 * Math.cos(BOAT_BODY.rotation.y) * WORLD.dt * speed
-			const speedRatio = Math.sqrt((BOAT_MOTION.translation.x * BOAT_MOTION.translation.x + BOAT_MOTION.translation.z * BOAT_MOTION.translation.z) / 0.003)
-			if (speedRatio > 1){
-				BOAT_MOTION.translation.x /= speedRatio
-				BOAT_MOTION.translation.z /= speedRatio
-				speed = Math.sqrt(0.003)
-			}
+			BOAT_MOTION.translation.x += 0.0005 * Math.sin(BOAT_BODY.rotation.y) * speed
+			BOAT_MOTION.translation.z += 0.0005 * Math.cos(BOAT_BODY.rotation.y) * speed
+
+			let apmlitude = CURRENT_WIND.translation.x
+			let windToSail = Math.cos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) //marineCos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y)
+			let windSpeed = Math.sin(BOAT_MAST.rotation.y) * Math.abs(windToSail) * windToSail * apmlitude
+			let sideWindSpeed = 0.1 * Math.cos(BOAT_MAST.rotation.y) * Math.abs(windToSail) * windToSail * apmlitude
+			BOAT_MOTION.translation.x += 0.00002 * Math.sin(BOAT_BODY.rotation.y) * windSpeed
+			BOAT_MOTION.translation.z += 0.00002 * Math.cos(BOAT_BODY.rotation.y) * windSpeed
+			BOAT_MOTION.translation.x -= 0.00002 * Math.cos(BOAT_BODY.rotation.y) * sideWindSpeed
+			BOAT_MOTION.translation.z += 0.00002 * Math.sin(BOAT_BODY.rotation.y) * sideWindSpeed
+			BOAT_MOTION.rotation.x += 0.00001 * Math.cos(BOAT_BODY.rotation.y) * Math.sin(BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) * windToSail * apmlitude
+			BOAT_MOTION.rotation.y -= 0.0000000001 * Math.cos(BOAT_SAIL.rotation.y) * windToSail * apmlitude / Math.max(speed, 0.00001)
+			BOAT_MOTION.rotation.z -= 0.00002 * Math.sin(BOAT_BODY.rotation.y) * Math.sin(BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) * windToSail * apmlitude
+
 			if (KEYS["a"])
-				BOAT_MOTION.rotation.y = Math.max(-0.05, BOAT_MOTION.rotation.y - 0.001 * WORLD.dt * Math.max(speed, 0.02))
+				BOAT_MOTION.rotation.y = Math.max(-0.05, BOAT_MOTION.rotation.y - 0.001 * Math.max(speed, 0.02))
 			if (KEYS["d"])
-				BOAT_MOTION.rotation.y = Math.min(0.05, BOAT_MOTION.rotation.y + 0.001 * WORLD.dt * Math.max(speed, 0.02))
-
-			BOAT_BODY.translation.x += BOAT_MOTION.translation.x
-			BOAT_BODY.translation.z += BOAT_MOTION.translation.z
-			BOAT_BODY.rotation.y += BOAT_MOTION.rotation.y
-			BOAT_BODY.rotation.z += BOAT_MOTION.rotation.z
-			CAMERA.rotation.y = BOAT_BODY.rotation.y
-
+				BOAT_MOTION.rotation.y = Math.min(0.05, BOAT_MOTION.rotation.y + 0.001 * Math.max(speed, 0.02))
 			if (KEYS["ArrowLeft"])
 				BOAT_MAST.rotation.y = Math.min(BOAT_MAST.rotation.y + 0.002 * WORLD.dt, 3 * Math.PI / 2)
 			if (KEYS["ArrowRight"])
@@ -707,7 +714,16 @@
 		})
 
 		UPDATES.push(() => {
-			const sail = Math.sin(WORLD.time % 3000 / 1500 * Math.PI)
+			BOAT_BODY.translation.x += BOAT_MOTION.translation.x * WORLD.dt
+			BOAT_BODY.translation.z += BOAT_MOTION.translation.z * WORLD.dt
+			BOAT_BODY.rotation.x += BOAT_MOTION.rotation.x * 10 // * WORLD.dt
+			BOAT_BODY.rotation.y += BOAT_MOTION.rotation.y * WORLD.dt
+			BOAT_BODY.rotation.z += BOAT_MOTION.rotation.z * 10 // * WORLD.dt
+			CAMERA.rotation.y = BOAT_BODY.rotation.y
+		})
+
+		UPDATES.push(() => {
+			const sail = 1.3 * CURRENT_WIND.translation.x / MAX_FLOW_FORCE * Math.cos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y + Math.PI)
 			modifyArrayBuffer(BOAT_SAIL.trianglesBuffer, BOAT_SAIL_POINTS, [sail, 2.3, 1.5])
 			modifyArrayBuffer(BOAT_SAIL.linesBuffer, BOAT_SAIL_POINTS, [sail, 2.3, 1.5])
 		})
