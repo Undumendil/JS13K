@@ -183,8 +183,6 @@
 			return inverse ? rotY.x(rotX).x(rotZ) : rotZ.x(rotX).x(rotY)
 		}
 
-		const marineCos = (arg) => Math.cos(BOAT_MAST.rotation.y) < 0.5 ? Math.sign(Math.cos(arg)) : Math.cos(arg) //Not ready yet
-
 		function compile(type, source) {
 			let shader = gl.createShader(type)
 			gl.shaderSource(shader, source)
@@ -509,7 +507,10 @@
 			0.0, -0.9, 2.6,
 			1.6, 1.0, 0.0,
 		)
-		CAMERA.translation = BOAT_BODY.translation
+		//CAMERA.translation = BOAT_BODY.translation
+		CAMERA.translation.x = BOAT_BODY.translation.x
+		CAMERA.translation.y = BOAT_BODY.translation.y
+		CAMERA.translation.z = BOAT_BODY.translation.z
 		BOAT_BODY.rotation.x = -Math.PI / 24
 		BOAT_BODY.rotation.z = Math.PI / 18
 		BOAT_BODY.scale.x = 0.25
@@ -692,15 +693,15 @@
 			BOAT_MOTION.translation.z += 0.0005 * Math.cos(BOAT_BODY.rotation.y) * speed
 
 			let apmlitude = CURRENT_WIND.translation.x
-			let windToSail = Math.cos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) //marineCos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y)
+			let windToSail = Math.sign(Math.cos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y))
 			let windSpeed = Math.sin(BOAT_MAST.rotation.y) * Math.abs(windToSail) * windToSail * apmlitude
 			let sideWindSpeed = 0.1 * Math.cos(BOAT_MAST.rotation.y) * Math.abs(windToSail) * windToSail * apmlitude
 			BOAT_MOTION.translation.x += 0.00002 * Math.sin(BOAT_BODY.rotation.y) * windSpeed
 			BOAT_MOTION.translation.z += 0.00002 * Math.cos(BOAT_BODY.rotation.y) * windSpeed
-			BOAT_MOTION.translation.x -= 0.00002 * Math.cos(BOAT_BODY.rotation.y) * sideWindSpeed
-			BOAT_MOTION.translation.z += 0.00002 * Math.sin(BOAT_BODY.rotation.y) * sideWindSpeed
+			BOAT_MOTION.translation.x -= 0.00002 * Math.cos(BOAT_BODY.rotation.y) * Math.cos(BOAT_SAIL.rotation.y) * sideWindSpeed
+			BOAT_MOTION.translation.z += 0.00002 * Math.sin(BOAT_BODY.rotation.y) * Math.cos(BOAT_SAIL.rotation.y) * sideWindSpeed
 			BOAT_MOTION.rotation.x += 0.00001 * Math.cos(BOAT_BODY.rotation.y) * Math.sin(BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) * windToSail * apmlitude
-			BOAT_MOTION.rotation.y -= 0.0000000001 * Math.cos(BOAT_SAIL.rotation.y) * windToSail * apmlitude / Math.max(speed, 0.00001)
+			BOAT_MOTION.rotation.y -= 0.000003 * Math.abs(Math.sin(BOAT_MAST.rotation.y)) * windToSail * apmlitude
 			BOAT_MOTION.rotation.z -= 0.00002 * Math.sin(BOAT_BODY.rotation.y) * Math.sin(BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) * windToSail * apmlitude
 
 			if (KEYS["a"])
@@ -716,10 +717,15 @@
 		UPDATES.push(() => {
 			BOAT_BODY.translation.x += BOAT_MOTION.translation.x * WORLD.dt
 			BOAT_BODY.translation.z += BOAT_MOTION.translation.z * WORLD.dt
-			BOAT_BODY.rotation.x += BOAT_MOTION.rotation.x * 10 // * WORLD.dt
+			BOAT_BODY.rotation.x += BOAT_MOTION.rotation.x * 10 * Math.min(WORLD.dt / 1000, 1)
 			BOAT_BODY.rotation.y += BOAT_MOTION.rotation.y * WORLD.dt
-			BOAT_BODY.rotation.z += BOAT_MOTION.rotation.z * 10 // * WORLD.dt
-			CAMERA.rotation.y = BOAT_BODY.rotation.y
+			BOAT_BODY.rotation.z += BOAT_MOTION.rotation.z * 10 * Math.min(WORLD.dt / 1000, 1)
+			CAMERA.translation.x += (BOAT_BODY.translation.x - CAMERA.translation.x) * Math.min(WORLD.dt / 400, 1)
+			CAMERA.translation.y += (BOAT_BODY.translation.y - CAMERA.translation.y) * Math.min(WORLD.dt / 400, 1)
+			CAMERA.translation.z += (BOAT_BODY.translation.z - CAMERA.translation.z) * Math.min(WORLD.dt / 400, 1)
+			CAMERA.rotation.x = 0.01 + CAMERA.rotation.x + (BOAT_BODY.rotation.x - CAMERA.rotation.x) * Math.min(WORLD.dt / 1000, 1)
+			CAMERA.rotation.y += (BOAT_BODY.rotation.y - CAMERA.rotation.y) * Math.min(WORLD.dt / 1000, 1)
+			CAMERA.rotation.z += (BOAT_BODY.rotation.z - CAMERA.rotation.z) * Math.min(WORLD.dt / 1000, 1)
 		})
 
 		UPDATES.push(() => {
