@@ -85,6 +85,26 @@ class Attribute {
 	}
 }
 
+class Random {
+	constructor(seed = 123456789){
+		this.seed = seed
+		this.something = 987654321
+		this.mask = 0xffffffff
+	}
+	get(){
+		this.something = (36969 * (this.something & 65535) + (this.something >> 16)) & this.mask
+		this.seed = (18000 * (this.seed & 65535) + (this.seed >> 16)) & this.mask
+		return (((this.something << 16) + this.seed) & this.mask) / 4294967296 + 0.5
+	}
+	setSeed(seed){
+		this.seed = seed
+		this.something = 987654321
+	}
+	roll(probability){
+		return this.get() < probability
+	}
+}
+
 Array.prototype.x = function(m) {
 	const out = []
 	for (let i = 0; i < 4; i++)
@@ -94,6 +114,114 @@ Array.prototype.x = function(m) {
 				out[j * 4 + i] += m[i + k * 4] * this[j * 4 + k]
 		}
 	return out
+}
+
+Array.prototype.areThereAnyOf = function(tileArray, cam){
+	for (tile in tileArray){
+		let tData = tile.split(",")
+		if (this.indexOf(tile.add(renderCamera.toString().mul(-1))) != -1 && tileArray[tile] > 0)
+			return true
+	}
+	return false
+}
+
+Array.prototype.fill = function(generator){
+	this.length = 0
+	let params = Array.prototype.slice.apply(arguments).slice(1)
+	let tempTiles = []
+	generator.apply(null, [this, tempTiles, params, 0, 0])
+	while (tempTiles.length > 0){
+		let tile = tempTiles.shift()
+		generator.apply(null, [this, tempTiles, params, tile.x(), tile.y()])
+	}
+	return this
+}
+
+Array.prototype.isInside = function(tile){
+	return this.indexOf(tile) != -1
+}
+
+String.prototype.up = function(){
+	let tData = this.split(",")
+	return (+tData[0] + +tData[1]) % 2 != 0
+}
+
+String.prototype.add = function(){
+	let tData = this.split(",")
+	if (arguments.length == 1){
+		if (typeof arguments[0] == "object"){
+			return (+tData[0] + arguments[0][0]) + "," + (+tData[1] + arguments[0][1])
+		} else {
+			let uData = arguments[0].split(",")
+			return (+tData[0] + +uData[0]) + "," + (+tData[1] + +uData[1])
+		}
+	}
+	return (+tData[0] + arguments[0]) + "," + (+tData[1] + arguments[1])
+}
+
+String.prototype.x = function(){
+	return +this.split(",")[0]
+}
+
+String.prototype.y = function(){
+	return +this.split(",")[1]
+}
+
+String.prototype.len = function(){
+	let tData = this.split(",")
+	return Math.sqrt(+tData[0] * +tData[0] + +tData[1] * +tData[1])
+}
+
+String.prototype.mul = function(multiplier){
+	let tData = this.split(",")
+	if (typeof multiplier == "string")
+		return +tData[0] * multiplier.x + +tData[1] * multiplier.y
+	return (+tData[0] * multiplier) + "," + (+tData[1] * multiplier)
+}
+
+String.prototype.setLength = function(length){
+	let tData = this.split(",")
+	if (+tData[0] == 0 && +tData[1] == 0)
+		return this
+	return this.mul(length / this.len())
+}
+
+String.prototype.toWorldCoordinate = function(){
+	let tData = this.split(",")
+	return ((+tData[0] / 2) + "," + (sqrt3 / 3 + +tData[1] * sqrt3 / 2 - sqrt3 / 6 * this.up())).mul(CHUNK_SIDE)
+}
+
+const surroundings = (center) => center.up() ?
+					 [ "1,0", "1,1", "0,1", "-1,1", "-1,0", "-2,0", "-2,-1", "-1,-1", "0,-1", "1,-1", "2,-1", "2,0" ] :
+					 [ "1,0", "2,0", "2,1",  "1,1",  "0,1", "-1,1", "-2,1",  "-2,0", "-1,0", "-1,-1", "0,-1", "1,-1" ]
+const goodSurroundings = (center) => center.up() ?
+						 [ "1,0", "-1,0", "0,-1" ] :
+						 [ "1,0", "-1,0", "0,1" ]
+
+function inside(up, vec){
+	vec = vec.add(0, -2 * vec.y())
+	if (up){
+		vec = vec.add(CHUNK_SIDE / 2, CHUNK_SIDE * sqrt3 / 6)
+		let B = "0,0".add(CHUNK_SIDE, 0)
+		let C = "0,0".add(CHUNK_SIDE / 2, CHUNK_SIDE * sqrt3 / 2)
+		let m = (vec.x() * B.y() - vec.y() * B.x()) / (C.x() * B.y() - B.x() * C.y())
+		if (m >= 0 && m <= 1){
+			let l = (vec.x() - m * C.x()) / B.x()
+			if (l >= 0 && (m + l) <= 1)
+				return true
+		}
+	} else {
+		vec = vec.add(CHUNK_SIDE / 2, -CHUNK_SIDE * sqrt3 / 6)
+		let B = "0,0".add(CHUNK_SIDE, 0)
+		let C = "0,0".add(CHUNK_SIDE / 2, -CHUNK_SIDE * sqrt3 / 2)
+		let m = (vec.x() * B.y() - vec.y() * B.x()) / (C.x() * B.y() - B.x() * C.y())
+		if (m >= 0 && m <= 1){
+			let l = (vec.x() - m * C.x()) / B.x()
+			if (l >= 0 && (m + l) <= 1)
+				return true
+		}
+	}
+	return false
 }
 
 function mat(x = 0, y = 0, z = 0, a = 1, b = 1, c = 1, d = 0, e = 1) {
@@ -232,6 +360,36 @@ function range(lower, target, higher) {
 	return target
 }
 
+function addRhombusTile(curArea, tempTiles, params, x, y){
+	if (Math.abs(x) / 2 + Math.abs(y) <= params[0] && curArea.indexOf(x + "," + y) == -1){
+		curArea.push(x + "," + y)
+		for (tile of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]])
+			if (Math.abs(tile[0]) / 2 + Math.abs(tile[1]) <= params[0]
+				&& curArea.indexOf(tile.toString()) == -1 && tempTiles.indexOf(tile.toString()) == -1)
+				tempTiles.push(tile.toString())
+	}
+}
+
+function addCircleTile(curArea, tempTiles, params, x, y){
+	if (x * x / 3.4 + y * y <= params[0] * params[0] && curArea.indexOf(x + "," + y) == -1){
+		curArea.push(x + "," + y)
+		for (tile of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]])
+			if (tile[0] * tile[0] / 3.4 + tile[1] * tile[1] <= params[0] * params[0]
+				&& curArea.indexOf(tile.toString()) == -1 && tempTiles.indexOf(tile.toString()) == -1)
+				tempTiles.push(tile.toString())
+	}
+}
+
+function addRectTile(curArea, tempTiles, params, x, y){
+	if (Math.abs(x) <= params[0] / 2 && Math.abs(y) <= params[1] / 2 && curArea.indexOf(x + "," + y) == -1){
+		curArea.push(x + "," + y)
+		for (tile of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]])
+			if (Math.abs(x) <= params[0] / 2 && Math.abs(y) <= params[1] / 2
+				&& curArea.indexOf(tile.toString()) == -1 && tempTiles.indexOf(tile.toString()) == -1)
+				tempTiles.push(tile.toString())
+	}
+}
+
 const MESH_VERTEX_SHADER = compile(gl.VERTEX_SHADER, `
 	precision lowp float;
 	attribute vec3 aPosition;
@@ -341,16 +499,16 @@ const CAMERA = new Model()
 CAMERA.rotation.x = deg(20)
 CAMERA.offset.z = -4
 CAMERA.offset.y = 1
+let customCameraRotation = deg(20)
 
 document.addEventListener('mousedown', e => {
 	CAMERA.isMoving = true
-	CAMERA.oldX = CAMERA.rotation.x + e.y / 500
-	CAMERA.oldY = CAMERA.rotation.y + e.x / 500
+	CAMERA.oldX = customCameraRotation + e.y / 500
 })
 
 document.addEventListener('mousemove', e => {
 	if (CAMERA.isMoving) {
-		CAMERA.rotation.x = range(deg(10), CAMERA.oldX - e.y / 500, deg(90))
+		customCameraRotation = range(deg(10), CAMERA.oldX - e.y / 500, deg(90))
 	}
 })
 
@@ -373,7 +531,7 @@ document.addEventListener('keyup', e => {
 })
 
 const WORLD = []
-const WATER = []
+const CHUNKS = {}
 WORLD.time = new Date().getTime()
 
 const sqrt3 = Math.sqrt(3)
@@ -480,6 +638,7 @@ const BOAT_BODY = new Mesh(4, 5,
 	0.0, -0.9,  2.6,
 	1.6,  1.0,  0.0,]
 )
+BOAT_BODY.translation.z = CHUNK_SIDE * sqrt3 / 3
 CAMERA.translation.x = BOAT_BODY.translation.x
 CAMERA.translation.y = BOAT_BODY.translation.y
 CAMERA.translation.z = BOAT_BODY.translation.z
@@ -587,24 +746,45 @@ const MAX_FLOW_FORCE = 2
 CURRENT_WIND.translation.x = 2
 CURRENT_WIND.rotation.y = Math.PI / 2
 
-let flip = false
-for (let k = -10; k < 11; k++) {
-	for (let i = -10; i < 11; i++) {
-		const WATER_CHUNK = new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, WATER_VERTICES)
-		WATER_CHUNK.rotation.y = flip ? 0 : Math.PI;
-		WATER_CHUNK.translation.z = (flip ? 0 : CHUNK_SIDE * sqrt3 / 2) + CHUNK_SIDE * sqrt3 / 2 * k
-		WATER_CHUNK.translation.x = i * CHUNK_SIDE / 2
-		WATER.push(WATER_CHUNK)
-		flip = !flip
+const renderCamera = [0, 0]
+const renderArea = [].fill(addCircleTile, 18)
+const cached = { "-2,1": 1, "0,-2": 2 }
+const water = () => new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, WATER_VERTICES)
+const island = () => new Mesh(GRASS_TRIANGLES_COLOR, GRASS_LINES_COLOR, CHUNK_VERTICES)
+const rock = () => new Mesh(ROCK_TRIANGLES_COLOR, ROCK_LINES_COLOR, ROCK_VERTICES)
+function whatIsThere(tile){
+	if (cached[tile] != undefined)
+		return cached[tile]
+	return 0
+}
+function addChunk(chunk, tile){
+	chunk.rotation.y = tile.up() ? 0 : Math.PI;
+	chunk.translation.z = (tile.up() ? 0 : CHUNK_SIDE * sqrt3 / 2) + CHUNK_SIDE * sqrt3 / 2 * tile.y()
+	chunk.translation.x = tile.x() * CHUNK_SIDE / 2
+	CHUNKS[tile].push(chunk)
+}
+function shift(delta_x, delta_y){
+	renderCamera[0] += delta_x
+	renderCamera[1] += delta_y
+	for (let tile in CHUNKS)
+		if (renderArea[tile.add(renderCamera.toString().mul(-1))] == undefined)
+			delete CHUNKS[tile]
+	for (let tile of renderArea){
+		let absolute = tile.add(renderCamera)
+		if (CHUNKS[absolute] == undefined){
+			CHUNKS[absolute] = []
+			addChunk(water(), absolute)
+			switch(whatIsThere(absolute)){
+				case 1:
+					addChunk(island(), absolute)
+					break
+				case 2:
+					addChunk(rock(), absolute)
+			}
+		}
 	}
 }
-
-const GRASS_CHUNK = new Mesh(GRASS_TRIANGLES_COLOR, GRASS_LINES_COLOR, CHUNK_VERTICES)
-GRASS_CHUNK.translation.x -= 4
-WORLD.push(GRASS_CHUNK)
-
-const ROCK_CHUNK = new Mesh(ROCK_TRIANGLES_COLOR, ROCK_LINES_COLOR, ROCK_VERTICES)
-WORLD.push(ROCK_CHUNK)
+shift(0, 0)
 
 requestAnimationFrame(function render() {
 	const newTime = new Date().getTime()
@@ -613,6 +793,18 @@ requestAnimationFrame(function render() {
 	WORLD.timeColor = (0.618 + Math.sign((WORLD.time / 5000) % 4 - 2) * (Math.sqrt(1.25 - Math.pow((WORLD.time / 5000) % 2 - 1, 2)) - 0.5)) / 1.236
 
 	//UPDATES
+
+	let boat = "0,0".add(BOAT_BODY.translation.x, BOAT_BODY.translation.z)
+	let delta = renderCamera.toString().toWorldCoordinate().add(boat.mul(-1))
+	if (!inside(renderCamera.toString().up(), delta))
+	if (delta.len() >= CHUNK_SIDE * sqrt3 / 6){
+		let nearest = "0,0"
+		for (tile of (delta.len() < CHUNK_SIDE * sqrt3 / 3 ? goodSurroundings(renderCamera.toString()) : surroundings(renderCamera.toString())))
+			if (renderCamera.toString().add(tile).toWorldCoordinate().add(boat.mul(-1)).len() < renderCamera.toString().add(nearest).toWorldCoordinate().add(boat.mul(-1)).len())
+				nearest = tile
+		if (inside(nearest.add(renderCamera.toString()).up(), renderCamera.toString().add(nearest).toWorldCoordinate().add(boat.mul(-1))))
+			shift(nearest.x(), nearest.y())
+	}
 
 	BOAT_MOTION.rotation.x *= Math.pow(0.99, 1 + 10000 * Math.abs(BOAT_MOTION.rotation.x))
 	BOAT_MOTION.rotation.y *= Math.pow(0.99, 1 + 10000 * Math.abs(BOAT_MOTION.rotation.y))
@@ -667,11 +859,11 @@ requestAnimationFrame(function render() {
 	CAMERA.translation.x += (BOAT_BODY.translation.x - CAMERA.translation.x) * Math.min(WORLD.dt / 400, 1)
 	CAMERA.translation.y += (BOAT_BODY.translation.y - CAMERA.translation.y) * Math.min(WORLD.dt / 400, 1)
 	CAMERA.translation.z += (BOAT_BODY.translation.z - CAMERA.translation.z) * Math.min(WORLD.dt / 400, 1)
-	CAMERA.rotation.x = 0.01 + CAMERA.rotation.x + (BOAT_BODY.rotation.x - CAMERA.rotation.x) * Math.min(WORLD.dt / 1000, 1)
+	CAMERA.rotation.x = customCameraRotation + (BOAT_BODY.rotation.x - CAMERA.rotation.x + customCameraRotation) * Math.min(WORLD.dt / 1000, 1)
 	CAMERA.rotation.y += (BOAT_BODY.rotation.y - CAMERA.rotation.y) * Math.min(WORLD.dt / 1000, 1)
 	CAMERA.rotation.z += (BOAT_BODY.rotation.z - CAMERA.rotation.z) * Math.min(WORLD.dt / 1000, 1)
 
-	const sail = 1.3 * CURRENT_WIND.translation.x / MAX_FLOW_FORCE * Math.cos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y + Math.PI)
+	const sail = -1.3 * CURRENT_WIND.translation.x / MAX_FLOW_FORCE * windToSail
 	modifyArrayBuffer(BOAT_SAIL.trianglesBuffer, BOAT_SAIL_POINTS, [sail, 2.3, 1.5])
 	modifyArrayBuffer(BOAT_SAIL.linesBuffer, BOAT_SAIL_POINTS, [sail, 2.3, 1.5])
 
@@ -679,7 +871,6 @@ requestAnimationFrame(function render() {
 
 	const empty = mat()
 	const projection = perspective(deg(90), space.clientWidth / space.clientHeight, 0.1, 100)
-	// const projection = scale(0.3, 0.3, 1).x(ortho(space.clientWidth / space.clientHeight, 100))
 
 	space.width = space.clientWidth
 	space.height = space.clientHeight
@@ -693,6 +884,9 @@ requestAnimationFrame(function render() {
 	gl.uniform3f(MESH_PROGRAM_PROPERTIES.uFogPivot,
 			BOAT_BODY.translation.x, BOAT_BODY.translation.y, BOAT_BODY.translation.z)
 
+	for (let chunks in CHUNKS)
+		for (let i = 1; i < CHUNKS[chunks].length; i++)
+			CHUNKS[chunks][i].render(MESH_PROGRAM_PROPERTIES, empty)
 	WORLD.forEach(it => it.render(MESH_PROGRAM_PROPERTIES, empty))
 
 	gl.useProgram(WATER_PROGRAM)
@@ -702,7 +896,8 @@ requestAnimationFrame(function render() {
 	gl.uniform3f(WATER_PROGRAM_PROPERTIES.uFogPivot,
 			BOAT_BODY.translation.x, BOAT_BODY.translation.y, BOAT_BODY.translation.z)
 
-	WATER.forEach(it => it.render(WATER_PROGRAM_PROPERTIES, empty))
+	for (let chunks in CHUNKS)
+		CHUNKS[chunks][0].render(WATER_PROGRAM_PROPERTIES, empty)
 
 	requestAnimationFrame(render)
 })

@@ -1,14 +1,14 @@
 #!/bin/bash
 rm result.zip 2>/dev/null
-mkdir .temp 2>/dev/null
+mkdir .build 2>/dev/null
 for type in html css js; do
 	for file in *.$type; do
 		echo "Compressing $file..."
-		python py/$type $file > .temp/$file
+		python py/$type $file > .build/$file
 	done
 done
 echo "Packing everything..."
-zip -j result.zip .temp/* &>/dev/null
-rm -rf .temp
+zip -j result.zip .build/* &>/dev/null
+rm -rf .build
 size=$(stat -c '%s' result.zip)
-echo "Final size: $size bytes of 13312 - $((size * 100 / 13312))%"
+echo "Final size: $size bytes of 13312 - $((size * 100 / 13312)).$((size * 10000 / 13312 % 100))%"
