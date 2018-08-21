@@ -742,9 +742,12 @@ const BOAT_SAIL_POINTS = [0, 4, 6]
 
 const BOAT_MOTION = new Model()
 const CURRENT_WIND = new Model()
+const CURRENT_WATER_FLOW = new Model()
 const MAX_FLOW_FORCE = 2
-CURRENT_WIND.translation.x = 2
+CURRENT_WIND.translation.x = 1
 CURRENT_WIND.rotation.y = Math.PI / 2
+CURRENT_WATER_FLOW.translation.x = 1
+CURRENT_WATER_FLOW.rotation.y = 0
 
 const renderCamera = [0, 0]
 const renderArea = [].fill(addCircleTile, 18)
@@ -799,8 +802,7 @@ requestAnimationFrame(function render() {
 
 	let boat = "0,0".add(BOAT_BODY.translation.x, BOAT_BODY.translation.z)
 	let delta = renderCamera.toString().toWorldCoordinate().add(boat.mul(-1))
-	if (!inside(renderCamera.toString().up(), delta))
-	if (delta.len() >= CHUNK_SIDE * sqrt3 / 6){
+	if (!inside(renderCamera.toString().up(), delta)){
 		let nearest = "0,0"
 		for (tile of (delta.len() < CHUNK_SIDE * sqrt3 / 3 ? goodSurroundings(renderCamera.toString()) : surroundings(renderCamera.toString())))
 			if (renderCamera.toString().add(tile).toWorldCoordinate().add(boat.mul(-1)).len() < renderCamera.toString().add(nearest).toWorldCoordinate().add(boat.mul(-1)).len())
@@ -827,7 +829,7 @@ requestAnimationFrame(function render() {
 		BOAT_MOTION.translation.x *= 0.99
 		BOAT_MOTION.translation.z *= 0.99
 		speed *= 0.99
-		BOAT_MOTION.rotation.y *= Math.pow(1.001, speed * 10)
+		BOAT_MOTION.rotation.y *= Math.pow(1.001, 1 + speed * 10)
 	}
 	BOAT_MOTION.translation.x += 0.0005 * Math.sin(BOAT_BODY.rotation.y) * speed
 	BOAT_MOTION.translation.z += 0.0005 * Math.cos(BOAT_BODY.rotation.y) * speed
@@ -841,9 +843,21 @@ requestAnimationFrame(function render() {
 	BOAT_MOTION.translation.z += 0.00002 * Math.cos(BOAT_BODY.rotation.y) * windSpeed
 	BOAT_MOTION.translation.x -= 0.00002 * Math.cos(BOAT_BODY.rotation.y) * Math.cos(BOAT_SAIL.rotation.y) * sideWindSpeed
 	BOAT_MOTION.translation.z += 0.00002 * Math.sin(BOAT_BODY.rotation.y) * Math.cos(BOAT_SAIL.rotation.y) * sideWindSpeed
-	BOAT_MOTION.rotation.x += 0.002 * Math.cos(BOAT_BODY.rotation.y) * Math.sin(BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) * windToSail * apmlitude
+	BOAT_MOTION.rotation.x += 0.001 * Math.cos(BOAT_BODY.rotation.y) * Math.sin(BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) * windToSail * apmlitude
 	BOAT_MOTION.rotation.y -= 0.000003 * Math.abs(Math.sin(BOAT_MAST.rotation.y)) * windToSail * apmlitude
 	BOAT_MOTION.rotation.z -= 0.003 * Math.sin(BOAT_BODY.rotation.y) * Math.sin(BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) * windToSail * apmlitude
+
+	let waterAmplitude = CURRENT_WATER_FLOW.translation.x
+	let waterToBoat = Math.sin(CURRENT_WATER_FLOW.rotation.y - BOAT_BODY.rotation.y)
+	let waterSpeed = waterAmplitude * waterToBoat
+	let sideWaterSpeed = 0.3 * Math.cos(CURRENT_WATER_FLOW.rotation.y - BOAT_BODY.rotation.y) * waterAmplitude
+	BOAT_MOTION.translation.x += 0.00001 * Math.sin(BOAT_BODY.rotation.y) * waterSpeed
+	BOAT_MOTION.translation.z += 0.00001 * Math.cos(BOAT_BODY.rotation.y) * waterSpeed
+	BOAT_MOTION.translation.x += 0.00001 * Math.cos(BOAT_BODY.rotation.y) * sideWaterSpeed
+	BOAT_MOTION.translation.z += 0.00001 * Math.sin(BOAT_BODY.rotation.y) * sideWaterSpeed
+	BOAT_MOTION.rotation.x -= 0.001 * Math.sign(Math.cos(CURRENT_WATER_FLOW.rotation.y - BOAT_BODY.rotation.y)) * waterToBoat * waterAmplitude
+	BOAT_MOTION.rotation.y -= 0.000003 * Math.cos(CURRENT_WATER_FLOW.rotation.y - BOAT_BODY.rotation.y) * Math.sign(waterToBoat) * waterAmplitude
+	BOAT_MOTION.rotation.z -= 0.003 * sideWaterSpeed * waterAmplitude
 
 	if (KEYS["a"] || KEYS["A"])
 		BOAT_MOTION.rotation.y = Math.max(-0.05, BOAT_MOTION.rotation.y - 0.001 * Math.max(speed, 0.02))
