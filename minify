@@ -2,7 +2,7 @@
 rm result.zip 2>/dev/null
 mkdir .temp 2>/dev/null
 for type in html css js; do
-	for file in $(find . -name "*.$type" -printf "%f\n"); do
+	for file in *.$type; do
 		echo "Compressing $file..."
 		python py/$type $file > .temp/$file
 	done

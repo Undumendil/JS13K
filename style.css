@@ -1,0 +1,27 @@
+* {
+	margin: 0;
+	user-select: none;
+}
+
+#space {
+	background-color: black;
+	height: 100%;
+	width: 100%;
+}
+
+p {
+	position: absolute;
+	padding: 10px;
+	margin: 20px;
+	color: #dcdcdc;
+	border-radius: 7px;
+	font: bold 30px Verdana;
+	background: #808080;
+	opacity: 0.4;
+}
+
+#turn { top: 0; left: 0; }
+#anchor { bottom: 0; left: 0; }
+#rotate_sail { top: 0; right: 0; }
+#enable_sail { bottom: 0; right: 0; }
+#centreboard { top: 50%; left: 0; transform: translateY(-50%); }
