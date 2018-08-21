@@ -776,10 +776,7 @@ function shift(delta_x, delta_y){
 		let absolute = tile.add(renderCamera)
 		if (CHUNKS[absolute] == undefined){
 			CHUNKS[absolute] = []
-			if (unusedWater.length > 0)
-				addChunk(unusedWater.pop(), absolute)
-			else
-				addChunk(water(), absolute)
+			addChunk(unusedWater.pop() || water(), absolute)
 			switch(whatIsThere(absolute)){
 				case 1:
 					addChunk(island(), absolute)
