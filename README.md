@@ -1,1 +1,1 @@
-https://undumendil.github.io/JS13K/
+undumendil.github.io/JS13K
