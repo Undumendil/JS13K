@@ -681,9 +681,10 @@
 			BOAT_MOTION.translation.z += 0.0005 * Math.cos(BOAT_BODY.rotation.y) * speed
 
 			let apmlitude = CURRENT_WIND.translation.x
-			let windToSail = Math.cos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y)
+			let sailToWater = Math.pow(Math.sqrt(1 / (1 / Math.cos(BOAT_BODY.rotation.x) + 1 / Math.cos(BOAT_BODY.rotation.z) - 1)), 7)
+			let windToSail = Math.cos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) * sailToWater
 			let windSpeed = Math.sin(BOAT_MAST.rotation.y) * Math.sign(windToSail) * apmlitude
-			let sideWindSpeed = 0.1 * Math.cos(BOAT_MAST.rotation.y) * Math.abs(Math.cos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y)) * Math.sign(windToSail) * apmlitude
+			let sideWindSpeed = 0.1 * Math.cos(BOAT_MAST.rotation.y) * windToSail * apmlitude
 			BOAT_MOTION.translation.x += 0.00002 * Math.sin(BOAT_BODY.rotation.y) * windSpeed
 			BOAT_MOTION.translation.z += 0.00002 * Math.cos(BOAT_BODY.rotation.y) * windSpeed
 			BOAT_MOTION.translation.x -= 0.00002 * Math.cos(BOAT_BODY.rotation.y) * Math.cos(BOAT_SAIL.rotation.y) * sideWindSpeed
