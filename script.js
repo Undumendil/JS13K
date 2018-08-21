@@ -766,14 +766,20 @@ function addChunk(chunk, tile){
 function shift(delta_x, delta_y){
 	renderCamera[0] += delta_x
 	renderCamera[1] += delta_y
+	let unusedWater = []
 	for (let tile in CHUNKS)
-		if (renderArea[tile.add(renderCamera.toString().mul(-1))] == undefined)
+		if (renderArea[tile.add(renderCamera.toString().mul(-1))] == undefined){
+			unusedWater.push(CHUNKS[tile][0])
 			delete CHUNKS[tile]
+		}
 	for (let tile of renderArea){
 		let absolute = tile.add(renderCamera)
 		if (CHUNKS[absolute] == undefined){
 			CHUNKS[absolute] = []
-			addChunk(water(), absolute)
+			if (unusedWater.length > 0)
+				addChunk(unusedWater.pop(), absolute)
+			else
+				addChunk(water(), absolute)
 			switch(whatIsThere(absolute)){
 				case 1:
 					addChunk(island(), absolute)
