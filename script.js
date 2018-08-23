@@ -800,6 +800,11 @@ requestAnimationFrame(function render() {
 
 	//UPDATES
 
+	let waveState = WORLD.time % 2000 / 2000
+	let waveX = (BOAT_BODY.translation.x / 5.0 + waveState) * 2.0 * 3.14
+	let waveZ = (BOAT_BODY.translation.z / 5.0 + waveState) * 2.0 * 3.14
+	BOAT_MOTION.translation.y = 0.15 * (Math.sin(waveX) + Math.cos(waveZ)) - BOAT_BODY.translation.y
+
 	let boat = "0,0".add(BOAT_BODY.translation.x, BOAT_BODY.translation.z)
 	let delta = renderCamera.toString().toWorldCoordinate().add(boat.mul(-1))
 	if (!inside(renderCamera.toString().up(), delta)){
@@ -807,8 +812,7 @@ requestAnimationFrame(function render() {
 		for (tile of (delta.len() < CHUNK_SIDE * sqrt3 / 3 ? goodSurroundings(renderCamera.toString()) : surroundings(renderCamera.toString())))
 			if (renderCamera.toString().add(tile).toWorldCoordinate().add(boat.mul(-1)).len() < renderCamera.toString().add(nearest).toWorldCoordinate().add(boat.mul(-1)).len())
 				nearest = tile
-		if (inside(nearest.add(renderCamera.toString()).up(), renderCamera.toString().add(nearest).toWorldCoordinate().add(boat.mul(-1))))
-			shift(nearest.x(), nearest.y())
+		shift(nearest.x(), nearest.y())
 	}
 
 	BOAT_MOTION.rotation.x *= Math.pow(0.99, 1 + 10000 * Math.abs(BOAT_MOTION.rotation.x))
@@ -869,6 +873,7 @@ requestAnimationFrame(function render() {
 		BOAT_MAST.rotation.y = Math.max(BOAT_MAST.rotation.y - 0.002 * WORLD.dt, Math.PI / 2)
 
 	BOAT_BODY.translation.x += BOAT_MOTION.translation.x * WORLD.dt
+	BOAT_BODY.translation.y += BOAT_MOTION.translation.y * Math.min(WORLD.dt / 700, 1)
 	BOAT_BODY.translation.z += BOAT_MOTION.translation.z * WORLD.dt
 	BOAT_BODY.rotation.x += BOAT_MOTION.rotation.x * 10 * Math.min(WORLD.dt / 1000, 1)
 	BOAT_BODY.rotation.y += BOAT_MOTION.rotation.y * WORLD.dt
