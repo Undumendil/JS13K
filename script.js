@@ -29,18 +29,39 @@ class Model {
 	}
 }
 
+Array.prototype.fillRange = function(values, start = 0, end = start + values.length){
+	for (let i = start; i < end; i++)
+		this[i] = values[i - start]
+}
+
+Array.prototype.flatten = function(){
+	return [].concat(...this.map(x => Array.isArray(x) ? x.flatten() : x))
+}
+
 class Mesh extends Model {
-	constructor(trianglesColor, linesColor, vertices) {
+	constructor(trianglesColor, linesColor, points, triangles) {
 		super()
 		this.children = []
 
-		const lines = calculateLines(vertices)
 		this.linesColor = linesColor
-		this.linesLength = lines.length / 3
 		this.trianglesColor = trianglesColor
-		this.trianglesLength = vertices.length / 3
-		this.trianglesBuffer = createArrayBuffer(vertices)
-		this.linesBuffer = createArrayBuffer(lines)
+		this.points = points
+		this.trianglesIDs = triangles
+		this.linesIDs = calculateLinesIDs(this.trianglesIDs)
+		this.trianglesLength = this.trianglesIDs.length
+		this.linesLength = this.linesIDs.length
+		this.trianglesBuffer = createArrayBuffer(readFrom(this.trianglesIDs, this.points))
+		this.linesBuffer = createArrayBuffer(readFrom(this.linesIDs, this.points))
+	}
+
+	update(pointsIDs, coords){
+		for (let idOfID = 0; idOfID < pointsIDs.length; idOfID++){
+			let id = pointsIDs[idOfID]
+			let coord = coords.slice(idOfID * 3, idOfID * 3 + 3)
+			this.points.fillRange(coord, id * 3, id * 3 + 3)
+			modifyArrayBuffer(this.trianglesBuffer, id, this.trianglesIDs, coord)
+			modifyArrayBuffer(this.linesBuffer, id, this.linesIDs, coord)
+		}
 	}
 
 	render(properties, parentModel) {
@@ -298,6 +319,13 @@ function link(vertex, fragment) {
 	return program
 }
 
+function readFrom(IDs, points){
+	let result = []
+	for (id of IDs)
+		result.push(points.slice(id * 3, id * 3 + 3))
+	return result.flatten()
+}
+
 function createArrayBuffer(data) {
 	const buffer = gl.createBuffer()
 	gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
@@ -306,12 +334,12 @@ function createArrayBuffer(data) {
 	return buffer
 }
 
-function modifyArrayBuffer(buffer, anchors, data) {
+function modifyArrayBuffer(buffer, id, idList, data) {
 	const data32 = new Float32Array(data)
 	gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-	for (let i = 0; i < anchors.length; i++) {
-		gl.bufferSubData(gl.ARRAY_BUFFER, anchors[i] * 3 * 4, data32)
-	}
+	for (let i = 0; i < idList.length; i++)
+		if (idList[i] == id)
+			gl.bufferSubData(gl.ARRAY_BUFFER, i * 3 * 4, data32)
 	gl.bindBuffer(gl.ARRAY_BUFFER, null)
 	return buffer
 }
@@ -335,18 +363,18 @@ function cache(container, target, a, b) {
 	const ba = pb + ':' + pa
 	if (!container[ab] && !container[ba]) {
 		container[ab] = container[ba] = true
-		append(target, a, 3)
-		append(target, b, 3)
+		append(target, a, 1)
+		append(target, b, 1)
 	}
 }
 
-function calculateLines(vertices) {
+function calculateLinesIDs(trianglesIDs) {
 	const found = {}
 	const lines = []
-	for (let i = 0; i < vertices.length; i += 9) {
-		const a = extract(vertices, i, 3)
-		const b = extract(vertices, i + 3, 3)
-		const c = extract(vertices, i + 6, 3)
+	for (let i = 0; i < trianglesIDs.length; i += 3) {
+		const a = extract(trianglesIDs, i, 1)
+		const b = extract(trianglesIDs, i + 1, 1)
+		const c = extract(trianglesIDs, i + 2, 1)
 		cache(found, lines, a, b)
 		cache(found, lines, b, c)
 		cache(found, lines, a, c)
@@ -445,21 +473,21 @@ const FRAGMENT_SHADER = compile(gl.FRAGMENT_SHADER, `
 			return vec3(0.0, 1.0 - 0.8 * uTimeColor, 0.9 - 0.7 * uTimeColor);
 		if (uColor == 1) //WATER_LINES_COLOR
 			return vec3(0.0, 0.6 - 0.5 * uTimeColor, 0.5 - 0.4 * uTimeColor);
-		if (uColor == 2) //GRASS_TRIANGLES_COLOR
+		if (uColor == 2) //ISLAND_TRIANGLES_COLOR
 			return vec3(0.3 - 0.1 * uTimeColor, 0.8 - 0.2 * uTimeColor, 0.3 - 0.1 * uTimeColor);
-		if (uColor == 3) //GRASS_LINES_COLOR
+		if (uColor == 3) //ISLAND_LINES_COLOR
 			return vec3(0.2 - 0.1 * uTimeColor, 0.5 - 0.2 * uTimeColor, 0.2 - 0.1 * uTimeColor);
-		if (uColor == 4 || uColor == 6) //BOAT_BODY_TRIANGLES_COLOR; BOAT_MAST_TRIANGLES_COLOR
+		if (uColor == 4) //BOAT_BODY_TRIANGLES_COLOR; BOAT_MAST_TRIANGLES_COLOR
 			return vec3(0.6 - 0.3 * uTimeColor, 0.5 - 0.2 * uTimeColor, 0.4 - 0.2 * uTimeColor);
-		if (uColor == 5 || uColor == 7) //BOAT_BODY_LINES_COLOR; BOAT_MAST_LINES_COLOR
+		if (uColor == 5) //BOAT_BODY_LINES_COLOR; BOAT_MAST_LINES_COLOR
 			return vec3(0.5 - 0.3 * uTimeColor, 0.4 - 0.2 * uTimeColor, 0.3 - 0.1 * uTimeColor);
-		if (uColor == 8) //BOAT_SAIL_TRIANGLES_COLOR
+		if (uColor == 6) //BOAT_SAIL_TRIANGLES_COLOR
 			return vec3(1.0 - 0.3 * uTimeColor, 1.0 - 0.3 * uTimeColor, 1.0 - 0.3 * uTimeColor);
-		if (uColor == 9) //BOAT_SAIL_LINES_COLOR
+		if (uColor == 7) //BOAT_SAIL_LINES_COLOR
 			return vec3(0.6 - 0.2 * uTimeColor, 0.6 - 0.2 * uTimeColor, 0.6 - 0.2 * uTimeColor);
-		if (uColor == 10) //ROCK_TRIANGLES_COLOR
+		if (uColor == 8) //ROCK_TRIANGLES_COLOR
 			return vec3(0.6 - 0.4 * uTimeColor, 0.6 - 0.4 * uTimeColor, 0.6 - 0.4 * uTimeColor);
-		if (uColor == 11) //ROCK_LINES_COLOR
+		if (uColor == 9) //ROCK_LINES_COLOR
 			return vec3(0.5 - 0.4 * uTimeColor, 0.5 - 0.4 * uTimeColor, 0.5 - 0.4 * uTimeColor);
 		return vec3(0.0, 0.0, 0.0);
 	}
@@ -538,105 +566,80 @@ const sqrt3 = Math.sqrt(3)
 const CHUNK_SIDE = 4
 const WATER_TRIANGLES_COLOR = 0
 const WATER_LINES_COLOR = 1
-const WATER_VERTICES = [
-	-CHUNK_SIDE / 2, 0, 0,
-	 0,              0, 0,
-	-CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
-	 0,              0, 0,
-	 CHUNK_SIDE / 2, 0, 0,
-	 CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
-	-CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
-	 CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
-	 0,              0, CHUNK_SIDE * sqrt3 / 2,
-	 0,              0, 0,
-	 CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
-	-CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4,
+const WATER_POINTS = [
+   -CHUNK_SIDE / 2, 0, 0,                      //0
+	0,              0, 0,                      //1
+   -CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4, //2
+	CHUNK_SIDE / 2, 0, 0,                      //3
+	CHUNK_SIDE / 4, 0, CHUNK_SIDE * sqrt3 / 4, //4
+	0,              0, CHUNK_SIDE * sqrt3 / 2, //5
 ]
-const ROCK_TRIANGLES_COLOR = 10
-const ROCK_LINES_COLOR = 11
-const ROCK_VERTICES = [
-	 0,               0.4, CHUNK_SIDE * sqrt3 / 6,
-	 0,              -0.2, CHUNK_SIDE * sqrt3 / 12,
-	-CHUNK_SIDE / 8, -0.2, CHUNK_SIDE * sqrt3 * 5 / 24,
-	 0,               0.4, CHUNK_SIDE * sqrt3 / 6,
-	 0,              -0.2, CHUNK_SIDE * sqrt3 / 12,
-	 CHUNK_SIDE / 8, -0.2, CHUNK_SIDE * sqrt3 * 5 / 24,
-	 0,               0.4, CHUNK_SIDE * sqrt3 / 6,
-	 CHUNK_SIDE / 8, -0.2, CHUNK_SIDE * sqrt3 * 5 / 24,
-	-CHUNK_SIDE / 8, -0.2, CHUNK_SIDE * sqrt3 * 5 / 24,
+const WATER_TRIANGLES = [
+	0, 1, 2,
+	1, 2, 4,
+	1, 3, 4,
+	2, 4, 5,
 ]
-const GRASS_TRIANGLES_COLOR = 2
-const GRASS_LINES_COLOR = 3
-const CHUNK_VERTICES = [
-	-CHUNK_SIDE / 2, -0.2, 0,
-	 0,              -0.2, 0,
-	-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
-	-CHUNK_SIDE / 2, -0.2, 0,
-	-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
-	-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
-	-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
-	 0,              -0.2, 0,
-	 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
-	 0,              -0.2, 0,
-	 CHUNK_SIDE / 2, -0.2, 0,
-	 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
-	 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
-	 CHUNK_SIDE / 2, -0.2, 0,
-	 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
-	 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
-	 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
-	 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
-	 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
-	 CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
-	 0,              -0.2, CHUNK_SIDE * sqrt3 / 2,
-	 0,              -0.2, CHUNK_SIDE * sqrt3 / 2,
-	-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
-	 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
-	-CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,
-	-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
-	 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
-	-CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
-	 CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12,
-	 0,               0.4, CHUNK_SIDE * sqrt3 / 3,
+const ROCK_TRIANGLES_COLOR = 8
+const ROCK_LINES_COLOR = 9
+const ROCK_POINTS = [
+	0,               0.4, CHUNK_SIDE * sqrt3 / 6,      //0
+	0,              -0.2, CHUNK_SIDE * sqrt3 / 12,     //1
+   -CHUNK_SIDE / 8, -0.2, CHUNK_SIDE * sqrt3 * 5 / 24, //2
+    CHUNK_SIDE / 8, -0.2, CHUNK_SIDE * sqrt3 * 5 / 24, //3
+]
+const ROCK_TRIANGLES = [
+	0, 1, 2,
+	0, 1, 3,
+	0, 2, 3,
+]
+const ISLAND_TRIANGLES_COLOR = 2
+const ISLAND_LINES_COLOR = 3
+const ISLAND_POINTS = [
+   -CHUNK_SIDE / 2, -0.2, 0, //0
+	0,              -0.2, 0, //1
+   -CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12, //2
+   -CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4, //3
+	CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12, //4
+	CHUNK_SIDE / 2, -0.2, 0, //5
+	CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4, //6
+	0,               0.4, CHUNK_SIDE * sqrt3 / 3, //7
+	0,              -0.2, CHUNK_SIDE * sqrt3 / 2, //8
+]
+const ISLAND_TRIANGLES = [
+	0, 1, 2,
+	0, 2, 3,
+	1, 2, 4,
+	1, 4, 5,
+	4, 5, 6,
+	4, 6, 7,
+	6, 7, 8,
+	3, 7, 8,
+	2, 3, 7,
+	2, 4, 7,
 ]
 
 const BOAT_BODY = new Mesh(4, 5,
-   [0.0, -0.9, -2.6,
-	0.0,  1.0, -3.4,
-   -1.6,  1.0,  0.0,
-	0.0,  0.9,  0.0,
-	0.0,  1.0,  3.4,
-   -1.6,  1.0,  0.0,
-	0.0,  1.0, -3.4,
-	0.0,  0.9,  0.0,
-   -1.6,  1.0,  0.0,
-	0.0, -0.9, -2.6,
-   -1.6,  1.0,  0.0,
-	0.0, -0.9,  0.0,
-   -1.6,  1.0,  0.0,
-	0.0,  1.0,  3.4,
-	0.0, -0.9,  2.6,
-	0.0, -0.9,  0.0,
-   -1.6,  1.0,  0.0,
-	0.0, -0.9,  2.6,
-	0.0, -0.9, -2.6,
-	1.6,  1.0,  0.0,
-	0.0,  1.0, -3.4,
-	0.0,  0.9,  0.0,
-	1.6,  1.0,  0.0,
-	0.0,  1.0,  3.4,
-	0.0,  1.0, -3.4,
-	1.6,  1.0,  0.0,
-	0.0,  0.9,  0.0,
-	0.0, -0.9, -2.6,
-	0.0, -0.9,  0.0,
-	1.6,  1.0,  0.0,
-	1.6,  1.0,  0.0,
-	0.0, -0.9,  2.6,
-	0.0,  1.0,  3.4,
-	0.0, -0.9,  0.0,
-	0.0, -0.9,  2.6,
-	1.6,  1.0,  0.0,]
+   [0.0, -0.9, -2.6, //0
+	0.0,  1.0, -3.4, //1
+   -1.6,  1.0,  0.0, //2
+	0.0,  0.9,  0.0, //3
+	0.0,  1.0,  3.4, //4
+	0.0, -0.9,  0.0, //5
+	0.0, -0.9,  2.6, //6
+	1.6,  1.0,  0.0],//7
+   [0, 1, 2,
+	3, 4, 2,
+	1, 3, 2,
+	0, 2, 5,
+	2, 4, 6,
+	5, 2, 6,
+	0, 7, 1,
+	3, 7, 4,
+	1, 7, 3,
+	0, 5, 7,
+	7, 6, 4,
+	5, 6, 7]
 )
 BOAT_BODY.translation.z = CHUNK_SIDE * sqrt3 / 3
 CAMERA.translation.x = BOAT_BODY.translation.x
@@ -649,96 +652,61 @@ BOAT_BODY.scale.y = 0.25
 BOAT_BODY.scale.z = 0.25
 WORLD.push(BOAT_BODY)
 
-const BOAT_MAST = new Mesh(6, 7,
-   [0.1, 6.0, 0.0,
-	0.1, 0.9, 0.0,
-	0.0, 0.9, 0.1,
-	0.0, 6.0, 0.1,
-	0.0, 0.9, 0.1,
-   -0.1, 0.9, 0.0,
-   -0.1, 6.0, 0.0,
-   -0.1, 0.9, 0.0,
-	0.0, 0.9, -0.1,
-	0.0, 6.0, -0.1,
-	0.0, 0.9, -0.1,
-	0.1, 0.9, 0.0,
-   -0.1, 0.9, 0.0,
-	0.0, 0.9, 0.1,
-	0.1, 0.9, 0.0,
-	0.0, 6.0, 0.1,
-   -0.1, 6.0, 0.0,
-	0.0, 6.0, -0.1,
-	0.1, 6.0, 0.0,
-	0.0, 0.9, 0.1,
-	0.0, 6.0, 0.1,
-	0.0, 6.0, 0.1,
-   -0.1, 0.9, 0.0,
-   -0.1, 6.0, 0.0,
-   -0.1, 6.0, 0.0,
-	0.0, 0.9, -0.1,
-	0.0, 6.0, -0.1,
-	0.0, 6.0, -0.1,
-	0.1, 0.9, 0.0,
-	0.1, 6.0, 0.0,
-   -0.1, 0.9, 0.0,
-	0.1, 0.9, 0.0,
-	0.0, 0.9, -0.1,
-	0.0, 6.0, 0.1,
-	0.0, 6.0, -0.1,
-	0.1, 6.0, 0.0,
-	0.1, 1.3, 0.0,
-	0.1, 1.3, 3.9,
-	0.0, 1.4, 3.9,
-	0.0, 1.4, 0.0,
-	0.0, 1.4, 3.9,
-   -0.1, 1.3, 3.9,
-   -0.1, 1.3, 0.0,
-   -0.1, 1.3, 3.9,
-	0.0, 1.2, 3.9,
-	0.0, 1.2, 0.0,
-	0.0, 1.2, 3.9,
-	0.1, 1.3, 3.9,
-   -0.1, 1.3, 3.9,
-	0.0, 1.4, 3.9,
-	0.1, 1.3, 3.9,
-	0.0, 1.4, 0.0,
-   -0.1, 1.3, 0.0,
-	0.0, 1.2, 0.0,
-	0.1, 1.3, 0.0,
-	0.0, 1.4, 3.9,
-	0.0, 1.4, 0.0,
-	0.0, 1.4, 0.0,
-   -0.1, 1.3, 3.9,
-   -0.1, 1.3, 0.0,
-   -0.1, 1.3, 0.0,
-	0.0, 1.2, 3.9,
-	0.0, 1.2, 0.0,
-	0.0, 1.2, 0.0,
-	0.1, 1.3, 3.9,
-	0.1, 1.3, 0.0,
-   -0.1, 1.3, 3.9,
-	0.1, 1.3, 3.9,
-	0.0, 1.2, 3.9,
-	0.0, 1.4, 0.0,
-	0.0, 1.2, 0.0,
-	0.1, 1.3, 0.0,]
+const BOAT_MAST = new Mesh(4, 5,
+   [0.1, 6.0,  0.0, //0
+	0.1, 0.9,  0.0, //1
+	0.0, 0.9,  0.1, //2
+	0.0, 6.0,  0.1, //3
+   -0.1, 0.9,  0.0, //4
+   -0.1, 6.0,  0.0, //5
+	0.0, 0.9, -0.1, //6
+	0.0, 6.0, -0.1, //7
+	0.1, 1.3,  0.0, //8
+	0.1, 1.3,  3.9, //9
+	0.0, 1.4,  3.9, //10
+	0.0, 1.4,  0.0, //11
+   -0.1, 1.3,  3.9, //12
+   -0.1, 1.3,  0.0, //13
+	0.0, 1.2,  3.9, //14
+	0.0, 1.2,  0.0],//15
+   [0,  1,  2,
+	0,  1,  7,
+	0,  2,  3,
+	0,  3,  7,
+	1,  2,  4,
+	1,  4,  6,
+	1,  6,  7,
+	2,  3,  4,
+	3,  4,  5,
+	3,  5,  7,
+	4,  5,  6,
+	5,  6,  7,
+	8,  9,  10,
+	8,  10, 11,
+	8,  9,  15,
+	8,  11, 15,
+	9,  14, 15,
+	9,  10, 12,
+	9,  12, 14,
+	10, 11, 12,
+	11, 13, 15,
+	11, 12, 13,
+	12, 13, 14,
+	13, 14, 15]
 )
 BOAT_BODY.children.push(BOAT_MAST)
 BOAT_MAST.rotation.y = Math.PI
 
-const BOAT_SAIL = new Mesh(8, 9,
-  [-0.1, 2.3, 1.5,
-	0.0, 1.4, 0.1,
-	0.0, 6.0, 0.1,
-	0.0, 1.4, 0.1,
-   -0.1, 2.3, 1.5,
-	0.0, 1.4, 3.9,
-   -0.1, 2.3, 1.5,
-	0.0, 6.0, 0.1,
-	0.0, 1.4, 3.9,]
+const BOAT_SAIL = new Mesh(6, 7,
+  [-0.1, 2.3, 1.5, //0
+ 	0.0, 1.4, 0.1, //1
+ 	0.0, 6.0, 0.1, //2
+	0.0, 1.4, 3.9],//3
+   [0, 1, 2,
+	0, 1, 3,
+	0, 2, 3]
 )
 BOAT_MAST.children.push(BOAT_SAIL)
-const BOAT_SAIL_POINTS = [0, 4, 6]
 
 const BOAT_MOTION = new Model()
 const CURRENT_WIND = new Model()
@@ -751,14 +719,20 @@ CURRENT_WATER_FLOW.rotation.y = 0
 
 const renderCamera = [0, 0]
 const renderArea = [].fill(addCircleTile, 18)
-const cached = { "-2,1": 1, "0,-2": 2 }
-const water = () => new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, WATER_VERTICES)
-const island = () => new Mesh(GRASS_TRIANGLES_COLOR, GRASS_LINES_COLOR, CHUNK_VERTICES)
-const rock = () => new Mesh(ROCK_TRIANGLES_COLOR, ROCK_LINES_COLOR, ROCK_VERTICES)
+const cached = { "-2,1": 1, "-2,2": 1, "-3,2": 1, "-1,2": 1, "-2,3": 1, "-1,3": 1, "0,-2": 2 }
+const water = () => new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, WATER_POINTS, WATER_TRIANGLES)
+const island = () => new Mesh(ISLAND_TRIANGLES_COLOR, ISLAND_LINES_COLOR, ISLAND_POINTS, ISLAND_TRIANGLES)
+const rock = () => new Mesh(ROCK_TRIANGLES_COLOR, ROCK_LINES_COLOR, ROCK_POINTS, ROCK_TRIANGLES)
 function whatIsThere(tile){
 	if (cached[tile] != undefined)
 		return cached[tile]
 	return 0
+}
+function updateIslandEdges(chunk, tile){
+
+}
+function undateIslandPoints(chunk, tile){
+	
 }
 function addChunk(chunk, tile){
 	chunk.rotation.y = tile.up() ? 0 : Math.PI;
@@ -885,9 +859,7 @@ requestAnimationFrame(function render() {
 	CAMERA.rotation.y += (BOAT_BODY.rotation.y - CAMERA.rotation.y) * Math.min(WORLD.dt / 1000, 1)
 	CAMERA.rotation.z += (BOAT_BODY.rotation.z - CAMERA.rotation.z) * Math.min(WORLD.dt / 1000, 1)
 
-	const sail = -1.3 * CURRENT_WIND.translation.x / MAX_FLOW_FORCE * windToSail
-	modifyArrayBuffer(BOAT_SAIL.trianglesBuffer, BOAT_SAIL_POINTS, [sail, 2.3, 1.5])
-	modifyArrayBuffer(BOAT_SAIL.linesBuffer, BOAT_SAIL_POINTS, [sail, 2.3, 1.5])
+	BOAT_SAIL.update([0], [-1.3 * CURRENT_WIND.translation.x / MAX_FLOW_FORCE * windToSail, 2.3, 1.5])
 
 	//UPDATES done
 
