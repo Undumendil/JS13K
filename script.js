@@ -1,5 +1,11 @@
-const gl = space.getContext("webgl")
-if (!gl) throw new Error("Could not initialize WebGL")
+let GL_VERSION = 2
+let gl = space.getContext("webgl2")
+if (!gl){
+	GL_VERSION = 1
+	gl = space.getContext("webgl")
+}
+if (!gl)
+	throw new Error("Could not initialize WebGL")
 
 gl.clearDepth(1)
 gl.enable(gl.DEPTH_TEST)
@@ -57,6 +63,18 @@ class Mesh extends Model {
 			modifyArrayBuffer(this.points, pointsIDs[idOfID], coords.slice(idOfID * 3, idOfID * 3 + 3))
 	}
 
+	read(pointID){
+		if (GL_VERSION == 2){
+			let buffer = new Float32Array(3)
+			gl.bindBuffer(gl.ARRAY_BUFFER, this.points)
+			gl.getBufferSubData(gl.ARRAY_BUFFER, pointID * 3 * 4, buffer, 0, 3)
+			gl.bindBuffer(gl.ARRAY_BUFFER, null)
+			return buffer
+		}
+		console.error("Your WebGL version is too old.")
+		return [0, 0, 0]
+	}
+
 	render(properties, parentModel) {
 		const model = this.total().x(parentModel)
 		this.children.forEach(it => it.render(properties, model))
@@ -74,6 +92,7 @@ class Mesh extends Model {
 		gl.uniform1i(properties.uColor, this.linesColor)
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.linesIDs)
 		gl.drawElements(gl.LINES, this.linesLength, gl.UNSIGNED_BYTE, 0)
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null)
 	}
 }
 
@@ -583,12 +602,12 @@ const ISLAND_TRIANGLES = [
 	0, 2, 3,
 	1, 2, 4,
 	1, 4, 5,
+	2, 3, 7,
+	2, 4, 7,
+	3, 7, 8,
 	4, 5, 6,
 	4, 6, 7,
 	6, 7, 8,
-	3, 7, 8,
-	2, 3, 7,
-	2, 4, 7,
 ]
 
 const BOAT_BODY = new Mesh(4, 5,
@@ -601,17 +620,17 @@ const BOAT_BODY = new Mesh(4, 5,
 	0.0, -0.9,  2.6, //6
 	1.6,  1.0,  0.0],//7
    [0, 1, 2,
-	3, 4, 2,
-	1, 3, 2,
 	0, 2, 5,
-	2, 4, 6,
-	5, 2, 6,
-	0, 7, 1,
-	3, 7, 4,
-	1, 7, 3,
 	0, 5, 7,
-	7, 6, 4,
-	5, 6, 7]
+	0, 7, 1,
+	1, 3, 2,
+	1, 7, 3,
+	2, 4, 6,
+	3, 4, 2,
+	3, 7, 4,
+	5, 2, 6,
+	5, 6, 7,
+	7, 6, 4]
 )
 BOAT_BODY.translation.z = CHUNK_SIDE * sqrt3 / 3
 CAMERA.translation.x = BOAT_BODY.translation.x
@@ -700,8 +719,51 @@ function whatIsThere(tile){
 		return cached[tile]
 	return 0
 }
-function updateIslandEdges(chunk, tile){
-
+const CENTER_IDS = [2, 4, 7]
+const SIDE_LEFT = 0
+const SIDE_VERTICAL = 1
+const SIDE_RIGHT = 2
+function getEdgeID(tile, sideNum){
+	switch(sideNum){
+		case SIDE_LEFT:
+			return tile.up() ? 3 : 6
+		case SIDE_RIGHT:
+			return tile.up() ? 6 : 3
+		case SIDE_VERTICAL:
+			return 1
+	}
+}
+function updateIslandEdges(tile, goDown = true){
+	let height = -1
+	let up = tile.up()
+	for (anotherTile of goodSurroundings(tile)){
+		let anotherAbsolute = tile.add(anotherTile)
+		let edgeID = getEdgeID(tile, 1 + anotherTile.x())
+		let initialCoords = CHUNKS[tile][1].read(edgeID)
+		if (cached[anotherAbsolute] == 1)
+			if (CHUNKS[anotherAbsolute] && CHUNKS[anotherAbsolute][1]){
+				height = CHUNKS[anotherAbsolute][1].read(edgeID)[1]
+				if (height < 0){
+					height = 0.2 + Math.random() / 1.4
+					CHUNKS[anotherAbsolute][1].update([edgeID], [initialCoords[0], height, initialCoords[2]])
+				}
+				CHUNKS[tile][1].update([edgeID], [initialCoords[0], height, initialCoords[2]])
+				if (goDown)
+					updateIslandEdges(anotherAbsolute, false)
+			} else {
+				height = -0.2
+				CHUNKS[tile][1].update([edgeID], [initialCoords[0], height, initialCoords[2]])
+			}
+		else {
+			height = -0.2
+			CHUNKS[tile][1].update([edgeID], [initialCoords[0], height, initialCoords[2]])
+		}
+	}
+	for (id of CENTER_IDS){
+		let height = 0.2 + Math.random() / 1.4
+		let initialCoords = CHUNKS[tile][1].read(id)
+		CHUNKS[tile][1].update([id], [initialCoords[0], height, initialCoords[2]])
+	}
 }
 function undateIslandPoints(chunk, tile){
 
@@ -712,12 +774,12 @@ function addChunk(chunk, tile){
 	chunk.translation.x = tile.x() * CHUNK_SIDE / 2
 	CHUNKS[tile].push(chunk)
 }
+let unusedWater = []
 function shift(delta_x, delta_y){
 	renderCamera[0] += delta_x
 	renderCamera[1] += delta_y
-	let unusedWater = []
 	for (let tile in CHUNKS)
-		if (renderArea[tile.add(renderCamera.toString().mul(-1))] == undefined){
+		if (renderArea.indexOf(tile.add(renderCamera.toString().mul(-1))) == -1){
 			unusedWater.push(CHUNKS[tile][0])
 			delete CHUNKS[tile]
 		}
@@ -729,6 +791,7 @@ function shift(delta_x, delta_y){
 			switch(whatIsThere(absolute)){
 				case 1:
 					addChunk(island(), absolute)
+					updateIslandEdges(absolute)
 					break
 				case 2:
 					addChunk(rock(), absolute)
@@ -755,9 +818,14 @@ requestAnimationFrame(function render() {
 	let delta = renderCamera.toString().toWorldCoordinate().add(boat.mul(-1))
 	if (!inside(renderCamera.toString().up(), delta)){
 		let nearest = "0,0"
-		for (tile of (delta.len() < CHUNK_SIDE * sqrt3 / 3 ? goodSurroundings(renderCamera.toString()) : surroundings(renderCamera.toString())))
-			if (renderCamera.toString().add(tile).toWorldCoordinate().add(boat.mul(-1)).len() < renderCamera.toString().add(nearest).toWorldCoordinate().add(boat.mul(-1)).len())
-				nearest = tile
+		let nearestToNearest = "0,0"
+		while (!inside(renderCamera.toString().add(nearest).up(), delta)){
+			for (tile of (delta.len() < CHUNK_SIDE * sqrt3 / 3 ? goodSurroundings(renderCamera.toString().add(nearest)) : surroundings(renderCamera.toString().add(nearest))))
+				if (renderCamera.toString().add(nearestToNearest.add(tile)).toWorldCoordinate().add(boat.mul(-1)).len() < renderCamera.toString().add(nearestToNearest).toWorldCoordinate().add(boat.mul(-1)).len())
+					nearestToNearest = nearestToNearest.add(tile)
+			nearest = nearestToNearest
+			delta = renderCamera.toString().add(nearest).toWorldCoordinate().add(boat.mul(-1))
+		}
 		shift(nearest.x(), nearest.y())
 	}
 
