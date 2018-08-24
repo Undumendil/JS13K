@@ -42,26 +42,19 @@ class Mesh extends Model {
 	constructor(trianglesColor, linesColor, points, triangles) {
 		super()
 		this.children = []
-
 		this.linesColor = linesColor
 		this.trianglesColor = trianglesColor
-		this.points = points
-		this.trianglesIDs = triangles
-		this.linesIDs = calculateLinesIDs(this.trianglesIDs)
-		this.trianglesLength = this.trianglesIDs.length
-		this.linesLength = this.linesIDs.length
-		this.trianglesBuffer = createArrayBuffer(readFrom(this.trianglesIDs, this.points))
-		this.linesBuffer = createArrayBuffer(readFrom(this.linesIDs, this.points))
+		this.points = createArrayBuffer(points)
+		this.trianglesIDs = createArrayBuffer(triangles, true)
+		let tempLines = calculateLinesIDs(triangles)
+		this.linesIDs = createArrayBuffer(tempLines, true)
+		this.trianglesLength = triangles.length
+		this.linesLength = tempLines.length
 	}
 
 	update(pointsIDs, coords){
-		for (let idOfID = 0; idOfID < pointsIDs.length; idOfID++){
-			let id = pointsIDs[idOfID]
-			let coord = coords.slice(idOfID * 3, idOfID * 3 + 3)
-			this.points.fillRange(coord, id * 3, id * 3 + 3)
-			modifyArrayBuffer(this.trianglesBuffer, id, this.trianglesIDs, coord)
-			modifyArrayBuffer(this.linesBuffer, id, this.linesIDs, coord)
-		}
+		for (let idOfID = 0; idOfID < pointsIDs.length; idOfID++)
+			modifyArrayBuffer(this.points, pointsIDs[idOfID], coords.slice(idOfID * 3, idOfID * 3 + 3))
 	}
 
 	render(properties, parentModel) {
@@ -69,17 +62,18 @@ class Mesh extends Model {
 		this.children.forEach(it => it.render(properties, model))
 		gl.uniformMatrix4fv(properties.uModel, false, model)
 
-		properties.aPosition.set(this.trianglesBuffer, 3)
+		properties.aPosition.set(this.points, 3)
 		gl.uniform1f(properties.uTimeColor, WORLD.timeColor)
 		gl.uniform1f(properties.uForward, 0.0)
 		gl.uniform1i(properties.uColor, this.trianglesColor)
-		gl.drawArrays(gl.TRIANGLES, 0, this.trianglesLength)
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.trianglesIDs)
+		gl.drawElements(gl.TRIANGLES, this.trianglesLength, gl.UNSIGNED_BYTE, 0)
 
-		properties.aPosition.set(this.linesBuffer, 3)
 		gl.uniform1f(properties.uTimeColor, WORLD.timeColor)
 		gl.uniform1f(properties.uForward, 0.001)
 		gl.uniform1i(properties.uColor, this.linesColor)
-		gl.drawArrays(gl.LINES, 0, this.linesLength)
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.linesIDs)
+		gl.drawElements(gl.LINES, this.linesLength, gl.UNSIGNED_BYTE, 0)
 	}
 }
 
@@ -319,52 +313,30 @@ function link(vertex, fragment) {
 	return program
 }
 
-function readFrom(IDs, points){
-	let result = []
-	for (id of IDs)
-		result.push(points.slice(id * 3, id * 3 + 3))
-	return result.flatten()
-}
-
-function createArrayBuffer(data) {
+function createArrayBuffer(data, indexBuffer = false) {
 	const buffer = gl.createBuffer()
-	gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
-	gl.bindBuffer(gl.ARRAY_BUFFER, null)
+	let type = indexBuffer ? gl.ELEMENT_ARRAY_BUFFER : gl.ARRAY_BUFFER
+	gl.bindBuffer(type, buffer)
+	gl.bufferData(type, indexBuffer ? new Uint8Array(data) : new Float32Array(data), gl.STATIC_DRAW);
+	gl.bindBuffer(type, null)
 	return buffer
 }
 
-function modifyArrayBuffer(buffer, id, idList, data) {
+function modifyArrayBuffer(buffer, id, data) {
 	const data32 = new Float32Array(data)
 	gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-	for (let i = 0; i < idList.length; i++)
-		if (idList[i] == id)
-			gl.bufferSubData(gl.ARRAY_BUFFER, i * 3 * 4, data32)
+	gl.bufferSubData(gl.ARRAY_BUFFER, id * 3 * 4, data32)
 	gl.bindBuffer(gl.ARRAY_BUFFER, null)
 	return buffer
-}
-
-function extract(data, index, size) {
-	const out = []
-	for (let i = 0; i < size; i++)
-		out.push(data[index + i])
-	return out
-}
-
-function append(target, data, size) {
-	for (let i = 0; i < size; i++)
-		target.push(data[i])
 }
 
 function cache(container, target, a, b) {
-	const pa = a.join(',')
-	const pb = b.join(',')
-	const ab = pa + ':' + pb
-	const ba = pb + ':' + pa
+	const ab = a + ':' + b
+	const ba = b + ':' + a
 	if (!container[ab] && !container[ba]) {
 		container[ab] = container[ba] = true
-		append(target, a, 1)
-		append(target, b, 1)
+		target.push(a)
+		target.push(b)
 	}
 }
 
@@ -372,9 +344,9 @@ function calculateLinesIDs(trianglesIDs) {
 	const found = {}
 	const lines = []
 	for (let i = 0; i < trianglesIDs.length; i += 3) {
-		const a = extract(trianglesIDs, i, 1)
-		const b = extract(trianglesIDs, i + 1, 1)
-		const c = extract(trianglesIDs, i + 2, 1)
+		const a = trianglesIDs[i]
+		const b = trianglesIDs[i + 1]
+		const c = trianglesIDs[i + 2]
 		cache(found, lines, a, b)
 		cache(found, lines, b, c)
 		cache(found, lines, a, c)
@@ -732,7 +704,7 @@ function updateIslandEdges(chunk, tile){
 
 }
 function undateIslandPoints(chunk, tile){
-	
+
 }
 function addChunk(chunk, tile){
 	chunk.rotation.y = tile.up() ? 0 : Math.PI;
