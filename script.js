@@ -685,15 +685,18 @@ const BOAT_MAST = new Mesh(4, 5,
 BOAT_BODY.children.push(BOAT_MAST)
 BOAT_MAST.rotation.y = Math.PI
 
-const BOAT_SAIL = new Mesh(6, 7,
-  [-0.1, 2.3, 1.5, //0
- 	0.0, 1.4, 0.1, //1
- 	0.0, 6.0, 0.1, //2
-	0.0, 1.4, 3.9],//3
-   [0, 1, 2,
-	0, 1, 3,
-	0, 2, 3]
-)
+const BOAT_SAIL_POINTS = [
+   -0.1, 2.3, 1.5, //0
+   	0.0, 1.4, 0.1, //1
+   	0.0, 6.0, 0.1, //2
+  	0.0, 1.4, 3.9  //3
+]
+const BOAT_SAIL_TRIANGLES = [
+	0, 1, 2,
+ 	0, 1, 3,
+ 	0, 2, 3
+]
+const BOAT_SAIL = new Mesh(6, 7, BOAT_SAIL_POINTS, BOAT_SAIL_TRIANGLES)
 BOAT_MAST.children.push(BOAT_SAIL)
 
 const BOAT_MOTION = new Model()
@@ -845,6 +848,12 @@ function shift(delta_x, delta_y){
 		}
 	}
 }
+
+const SAIL_ANIMATION_LENGTH = 700
+const SAIL_ANIMATION_FLOOR = 1.3
+let sailState = 1
+let removingSail = false
+
 shift(0, 0)
 
 requestAnimationFrame(function render() {
@@ -905,7 +914,7 @@ requestAnimationFrame(function render() {
 
 	let apmlitude = CURRENT_WIND.translation.x
 	let sailToWater = Math.pow(Math.sqrt(1 / (1 / Math.cos(BOAT_BODY.rotation.x) + 1 / Math.cos(BOAT_BODY.rotation.z) - 1)), 7)
-	let windToSail = Math.cos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) * sailToWater
+	let windToSail = Math.cos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) * sailToWater * sailState
 	let windSpeed = Math.sin(BOAT_MAST.rotation.y) * Math.sign(windToSail) * apmlitude
 	let sideWindSpeed = 0.1 * Math.cos(BOAT_MAST.rotation.y) * windToSail * apmlitude
 	BOAT_MOTION.translation.x += 0.00002 * Math.sin(BOAT_BODY.rotation.y) * windSpeed
@@ -950,7 +959,17 @@ requestAnimationFrame(function render() {
 	CAMERA.rotation.y += (BOAT_BODY.rotation.y - CAMERA.rotation.y) * Math.min(WORLD.dt / 1000, 1)
 	CAMERA.rotation.z += (BOAT_BODY.rotation.z - CAMERA.rotation.z) * Math.min(WORLD.dt / 1000, 1)
 
-	BOAT_SAIL.update([0], [-1.3 * CURRENT_WIND.translation.x / MAX_FLOW_FORCE * windToSail, 2.3, 1.5])
+	if (KEYS["ArrowUp"] && !KEYS["ArrowDown"])
+		removingSail = false
+	if (KEYS["ArrowDown"] && !KEYS["ArrowUp"])
+		removingSail = true
+	if (removingSail)
+		sailState = Math.max(sailState - WORLD.dt / SAIL_ANIMATION_LENGTH, 0)
+	else
+		sailState = Math.min(sailState + WORLD.dt / SAIL_ANIMATION_LENGTH, 1)
+	BOAT_SAIL.update([0], [-1.3 * CURRENT_WIND.translation.x / MAX_FLOW_FORCE * windToSail * sailState, 2.3, 1.5])
+	for (let i = 1; i < BOAT_SAIL_POINTS.length; i += 3)
+		BOAT_SAIL.updateY(Math.floor(i / 3), SAIL_ANIMATION_FLOOR + (BOAT_SAIL_POINTS[i] - SAIL_ANIMATION_FLOOR) * sailState)
 
 	//UPDATES done
 
