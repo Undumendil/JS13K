@@ -60,7 +60,11 @@ class Mesh extends Model {
 
 	update(pointsIDs, coords){
 		for (let idOfID = 0; idOfID < pointsIDs.length; idOfID++)
-			modifyArrayBuffer(this.points, pointsIDs[idOfID], coords.slice(idOfID * 3, idOfID * 3 + 3))
+			modifyArrayBuffer(this.points, pointsIDs[idOfID] * 3, coords.slice(idOfID * 3, idOfID * 3 + 3))
+	}
+
+	updateY(pointID, height){
+		modifyArrayBuffer(this.points, pointID * 3 + 1, [height])
 	}
 
 	read(pointID){
@@ -341,10 +345,10 @@ function createArrayBuffer(data, indexBuffer = false) {
 	return buffer
 }
 
-function modifyArrayBuffer(buffer, id, data) {
+function modifyArrayBuffer(buffer, offset, data) {
 	const data32 = new Float32Array(data)
 	gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-	gl.bufferSubData(gl.ARRAY_BUFFER, id * 3 * 4, data32)
+	gl.bufferSubData(gl.ARRAY_BUFFER, offset * 4, data32)
 	gl.bindBuffer(gl.ARRAY_BUFFER, null)
 	return buffer
 }
@@ -734,7 +738,6 @@ function getEdgeID(tile, sideNum){
 	}
 }
 function updateIslandEdges(tile, goDown = true){
-	let height = -1
 	let up = tile.up()
 	for (anotherTile of goodSurroundings(tile)){
 		let anotherAbsolute = tile.add(anotherTile)
@@ -742,22 +745,18 @@ function updateIslandEdges(tile, goDown = true){
 		let initialCoords = CHUNKS[tile][1].read(edgeID)
 		if (cached[anotherAbsolute] == 1)
 			if (CHUNKS[anotherAbsolute] && CHUNKS[anotherAbsolute][1]){
-				height = CHUNKS[anotherAbsolute][1].read(edgeID)[1]
+				let height = CHUNKS[anotherAbsolute][1].read(edgeID)[1]
 				if (height < 0){
 					height = 0.2 + Math.random() / 1.4
-					CHUNKS[anotherAbsolute][1].update([edgeID], [initialCoords[0], height, initialCoords[2]])
+					CHUNKS[anotherAbsolute][1].updateY(edgeID, height)
 				}
-				CHUNKS[tile][1].update([edgeID], [initialCoords[0], height, initialCoords[2]])
+				CHUNKS[tile][1].updateY(edgeID, height)
 				if (goDown)
 					updateIslandEdges(anotherAbsolute, false)
-			} else {
-				height = -0.2
-				CHUNKS[tile][1].update([edgeID], [initialCoords[0], height, initialCoords[2]])
-			}
-		else {
-			height = -0.2
-			CHUNKS[tile][1].update([edgeID], [initialCoords[0], height, initialCoords[2]])
-		}
+			} else
+				CHUNKS[tile][1].updateY(edgeID, -0.2)
+		else
+			CHUNKS[tile][1].updateY(edgeID, -0.2)
 	}
 	for (id of CENTER_IDS){
 		let height = 0.2 + Math.random() / 1.4
