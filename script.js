@@ -1,9 +1,4 @@
-let GL_VERSION = 2
-let gl = space.getContext("webgl2")
-if (!gl){
-	GL_VERSION = 1
-	gl = space.getContext("webgl")
-}
+const gl = space.getContext("webgl")
 if (!gl)
 	throw new Error("Could not initialize WebGL")
 
@@ -50,6 +45,9 @@ class Mesh extends Model {
 		this.children = []
 		this.linesColor = linesColor
 		this.trianglesColor = trianglesColor
+		this.cachedY = []
+		for (let i = 1; i < points.length; i += 3)
+			this.cachedY.push(points[i])
 		this.points = createArrayBuffer(points)
 		this.trianglesIDs = createArrayBuffer(triangles, true)
 		let tempLines = calculateLinesIDs(triangles)
@@ -59,24 +57,19 @@ class Mesh extends Model {
 	}
 
 	update(pointsIDs, coords){
-		for (let idOfID = 0; idOfID < pointsIDs.length; idOfID++)
+		for (let idOfID = 0; idOfID < pointsIDs.length; idOfID++){
 			modifyArrayBuffer(this.points, pointsIDs[idOfID] * 3, coords.slice(idOfID * 3, idOfID * 3 + 3))
+			this.cachedY[pointsIDs[idOfID]] = coords[idOfID * 3 + 1]
+		}
 	}
 
 	updateY(pointID, height){
 		modifyArrayBuffer(this.points, pointID * 3 + 1, [height])
+		this.cachedY[pointID] = height
 	}
 
-	read(pointID){
-		if (GL_VERSION == 2){
-			let buffer = new Float32Array(3)
-			gl.bindBuffer(gl.ARRAY_BUFFER, this.points)
-			gl.getBufferSubData(gl.ARRAY_BUFFER, pointID * 3 * 4, buffer, 0, 3)
-			gl.bindBuffer(gl.ARRAY_BUFFER, null)
-			return buffer
-		}
-		console.error("Your WebGL version is too old.")
-		return [0, 0, 0]
+	readY(pointID){
+		return this.cachedY[pointID]
 	}
 
 	render(properties, parentModel) {
@@ -714,7 +707,7 @@ CURRENT_WATER_FLOW.rotation.y = 0
 
 const renderCamera = [0, 0]
 const renderArea = [].fill(addCircleTile, 18)
-const cached = { "-2,1": 1, "-2,2": 1, "-3,2": 1, "-1,2": 1, "-2,3": 1, "-1,3": 1, "0,-2": 2 }
+const cached = { "-2,1": 1, "-2,2": 1, "-3,2": 1, "-1,2": 1, "-2,3": 1, "-1,3": 1, "0,2": 1, "0,3": 1, "0,-2": 2 }
 const water = () => new Mesh(WATER_TRIANGLES_COLOR, WATER_LINES_COLOR, WATER_POINTS, WATER_TRIANGLES)
 const island = () => new Mesh(ISLAND_TRIANGLES_COLOR, ISLAND_LINES_COLOR, ISLAND_POINTS, ISLAND_TRIANGLES)
 const rock = () => new Mesh(ROCK_TRIANGLES_COLOR, ROCK_LINES_COLOR, ROCK_POINTS, ROCK_TRIANGLES)
@@ -724,48 +717,94 @@ function whatIsThere(tile){
 	return 0
 }
 const CENTER_IDS = [2, 4, 7]
-const SIDE_LEFT = 0
-const SIDE_VERTICAL = 1
-const SIDE_RIGHT = 2
+const LEFT = 0
+const VERTICAL = 1
+const RIGHT = 2
 function getEdgeID(tile, sideNum){
 	switch(sideNum){
-		case SIDE_LEFT:
+		case LEFT:
 			return tile.up() ? 3 : 6
-		case SIDE_RIGHT:
+		case RIGHT:
 			return tile.up() ? 6 : 3
-		case SIDE_VERTICAL:
+		case VERTICAL:
 			return 1
 	}
 }
-function updateIslandEdges(tile, goDown = true){
+function getPointID(up, pointNum){
+	switch(pointNum){
+		case LEFT:
+			return up ? 0 : 5
+		case RIGHT:
+			return up ? 5 : 0
+		case VERTICAL:
+			return 8
+	}
+}
+function pointSurroundings(up, pointNum){
+	switch(pointNum){
+		case LEFT:
+			return up ? [ "0,-1", "-1,-1", "-2,-1", "-2,0", "-1,0" ] : [ "-1,0", "-2,0", "-2,1", "-1,1", "0,1" ]
+		case RIGHT:
+			return up ? [ "1,0",  "2,0", "2,-1", "1,-1", "0,-1" ] : [ "0,1", "1,1", "2,1", "2,0", "1,0" ]
+		case VERTICAL:
+			return up ? [ "-1,0", "-1,1", "0,1", "1,1", "1,0" ] : [ "1,0", "1,-1", "0,-1", "-1,-1", "-1,0" ]
+	}
+}
+function getPointSurroundingIndices(up, pointNum){
+	switch(getPointID(up, pointNum)){
+		case 0:
+			return [5, 8, 0, 5, 8]
+		case 5:
+			return [8, 0, 5, 8, 0]
+		case 8:
+			return [0, 5, 8, 0, 5]
+	}
+}
+function updateIslandEdges(tile){
 	let up = tile.up()
-	for (anotherTile of goodSurroundings(tile)){
+	for (let anotherTile of goodSurroundings(tile)){
 		let anotherAbsolute = tile.add(anotherTile)
 		let edgeID = getEdgeID(tile, 1 + anotherTile.x())
-		let initialCoords = CHUNKS[tile][1].read(edgeID)
 		if (cached[anotherAbsolute] == 1)
 			if (CHUNKS[anotherAbsolute] && CHUNKS[anotherAbsolute][1]){
-				let height = CHUNKS[anotherAbsolute][1].read(edgeID)[1]
+				let height = CHUNKS[anotherAbsolute][1].readY(edgeID)
 				if (height < 0){
 					height = 0.2 + Math.random() / 1.4
 					CHUNKS[anotherAbsolute][1].updateY(edgeID, height)
 				}
 				CHUNKS[tile][1].updateY(edgeID, height)
-				if (goDown)
-					updateIslandEdges(anotherAbsolute, false)
 			} else
 				CHUNKS[tile][1].updateY(edgeID, -0.2)
 		else
 			CHUNKS[tile][1].updateY(edgeID, -0.2)
 	}
-	for (id of CENTER_IDS){
-		let height = 0.2 + Math.random() / 1.4
-		let initialCoords = CHUNKS[tile][1].read(id)
-		CHUNKS[tile][1].update([id], [initialCoords[0], height, initialCoords[2]])
-	}
+	for (id of CENTER_IDS)
+		CHUNKS[tile][1].updateY(id, 0.2 + Math.random() / 1.4)
 }
-function undateIslandPoints(chunk, tile){
-
+function updateIslandPoints(tile){
+	let up = tile.up()
+	for (let point = 0; point < 3; point++){
+		let curIndices = getPointSurroundingIndices(up, point)
+		let count = 0
+		let surr = pointSurroundings(up, point)
+		let height = -0.2
+		for (let i = 0; i < surr.length; i++){
+			let anotherAbsolute = tile.add(surr[i])
+			count += cached[anotherAbsolute] == 1
+			if (CHUNKS[anotherAbsolute] != undefined && CHUNKS[anotherAbsolute][1] != undefined)
+				height = Math.max(height, CHUNKS[anotherAbsolute][1].readY(curIndices[i]))
+		}
+		if (height < 0)
+			if (count == 5){
+				height = 0.2 + Math.random() / 1.4
+				for (let i = 0; i < surr.length; i++){
+					let anotherAbsolute = tile.add(surr[i])
+					if (CHUNKS[anotherAbsolute] != undefined && CHUNKS[anotherAbsolute][1] != undefined)
+						CHUNKS[anotherAbsolute][1].updateY(curIndices[i], height)
+				}
+			}
+		CHUNKS[tile][1].updateY(getPointID(up, point), height)
+	}
 }
 function addChunk(chunk, tile){
 	chunk.rotation.y = tile.up() ? 0 : Math.PI;
@@ -774,12 +813,19 @@ function addChunk(chunk, tile){
 	CHUNKS[tile].push(chunk)
 }
 let unusedWater = []
+let unusedIslands = []
+let unusedRocks = []
 function shift(delta_x, delta_y){
 	renderCamera[0] += delta_x
 	renderCamera[1] += delta_y
 	for (let tile in CHUNKS)
 		if (renderArea.indexOf(tile.add(renderCamera.toString().mul(-1))) == -1){
 			unusedWater.push(CHUNKS[tile][0])
+			if (CHUNKS[tile][1])
+				if (CHUNKS[tile][1].cachedY.length != 4)
+					unusedIslands.push(CHUNKS[tile][1])
+				else
+					unusedRocks.push(CHUNKS[tile][1])
 			delete CHUNKS[tile]
 		}
 	for (let tile of renderArea){
@@ -789,11 +835,12 @@ function shift(delta_x, delta_y){
 			addChunk(unusedWater.pop() || water(), absolute)
 			switch(whatIsThere(absolute)){
 				case 1:
-					addChunk(island(), absolute)
+					addChunk(unusedIslands.pop() || island(), absolute)
 					updateIslandEdges(absolute)
+					updateIslandPoints(absolute)
 					break
 				case 2:
-					addChunk(rock(), absolute)
+					addChunk(unusedRocks.pop() || rock(), absolute)
 			}
 		}
 	}
@@ -805,6 +852,11 @@ requestAnimationFrame(function render() {
 	WORLD.dt = newTime - WORLD.time
 	WORLD.time = newTime
 	WORLD.timeColor = (0.618 + Math.sign((WORLD.time / 5000) % 4 - 2) * (Math.sqrt(1.25 - Math.pow((WORLD.time / 5000) % 2 - 1, 2)) - 0.5)) / 1.236
+
+	if (WORLD.dt > 10000){
+		requestAnimationFrame(render)
+		return
+	}
 
 	//UPDATES
 
