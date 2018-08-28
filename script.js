@@ -30,11 +30,6 @@ class Model {
 	}
 }
 
-Array.prototype.fillRange = function(values, start = 0, end = start + values.length){
-	for (let i = start; i < end; i++)
-		this[i] = values[i - start]
-}
-
 Array.prototype.flatten = function(){
 	return [].concat(...this.map(x => Array.isArray(x) ? x.flatten() : x))
 }
@@ -520,20 +515,18 @@ let customCameraRotation = deg(20)
 document.addEventListener('mousedown', e => {
 	CAMERA.isMoving = true
 	CAMERA.oldX = customCameraRotation + e.y / 500
+	CAMERA.oldOffset = CAMERA.offset.z - e.y / 100
 })
 
 document.addEventListener('mousemove', e => {
 	if (CAMERA.isMoving) {
 		customCameraRotation = range(deg(10), CAMERA.oldX - e.y / 500, deg(90))
+		CAMERA.offset.z = range(-9, CAMERA.oldOffset + e.y / 100, -2)
 	}
 })
 
 document.addEventListener('mouseup', e => {
 	CAMERA.isMoving = false
-})
-
-document.addEventListener('wheel', e => {
-	CAMERA.offset.z = range(-10, CAMERA.offset.z - e.deltaY / 100, -2)
 })
 
 const KEYS = []
@@ -855,6 +848,21 @@ let sailState = 1
 let removingSail = false
 
 shift(0, 0)
+
+let touch = []
+let cachedRotation = 0
+space.addEventListener("touchstart", function(touchEvent){
+	touch = [touchEvent.touches[0].screenX, touchEvent.touches[0].screenY]
+	cachedRotation = BOAT_MAST.rotation.y
+	CAMERA.oldX = customCameraRotation
+	CAMERA.oldOffset = CAMERA.offset.z - touch[1] / 100
+}, false)
+space.addEventListener("touchmove", function(touchEvent){
+	touchEvent.preventDefault()
+	BOAT_MAST.rotation.y = range(Math.PI / 2, cachedRotation - 0.005 * (touchEvent.touches[0].screenX - touch[0]), 3 * Math.PI / 2)
+	customCameraRotation = range(deg(10), CAMERA.oldX - (touchEvent.touches[0].screenY - touch[1]) / 500, deg(90))
+	CAMERA.offset.z = range(-9, CAMERA.oldOffset + touchEvent.touches[0].screenY / 100, -2)
+}, false)
 
 requestAnimationFrame(function render() {
 	const newTime = new Date().getTime()
