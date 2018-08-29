@@ -40,9 +40,8 @@ class Mesh extends Model {
 		this.children = []
 		this.linesColor = linesColor
 		this.trianglesColor = trianglesColor
-		this.cachedY = []
-		for (let i = 1; i < points.length; i += 3)
-			this.cachedY.push(points[i])
+		this.cachedPoints = []
+		points.forEach(x => this.cachedPoints.push(x))
 		this.points = createArrayBuffer(points)
 		this.trianglesIDs = createArrayBuffer(triangles, true)
 		let tempLines = calculateLinesIDs(triangles)
@@ -54,17 +53,41 @@ class Mesh extends Model {
 	update(pointsIDs, coords){
 		for (let idOfID = 0; idOfID < pointsIDs.length; idOfID++){
 			modifyArrayBuffer(this.points, pointsIDs[idOfID] * 3, coords.slice(idOfID * 3, idOfID * 3 + 3))
-			this.cachedY[pointsIDs[idOfID]] = coords[idOfID * 3 + 1]
+			this.cachedPoints[pointsIDs[idOfID] * 3] = coords[idOfID * 3]
+			this.cachedPoints[pointsIDs[idOfID] * 3 + 1] = coords[idOfID * 3 + 1]
+			this.cachedPoints[pointsIDs[idOfID] * 3 + 2] = coords[idOfID * 3 + 2]
 		}
 	}
 
-	updateY(pointID, height){
-		modifyArrayBuffer(this.points, pointID * 3 + 1, [height])
-		this.cachedY[pointID] = height
+	updateX(pointID, x){
+		modifyArrayBuffer(this.points, pointID * 3, [x])
+		this.cachedPoints[pointID * 3] = x
+	}
+
+	updateY(pointID, y){
+		modifyArrayBuffer(this.points, pointID * 3 + 1, [y])
+		this.cachedPoints[pointID * 3 + 1] = y
+	}
+
+	updateZ(pointID, z){
+		modifyArrayBuffer(this.points, pointID * 3 + 2, [z])
+		this.cachedPoints[pointID * 3 + 2] = z
+	}
+
+	read(pointID){
+		return this.cachedPoints.slice(pointID * 3, pointID * 3 + 3)
+	}
+
+	readX(pointID){
+		return this.cachedPoints[pointID * 3]
 	}
 
 	readY(pointID){
-		return this.cachedY[pointID]
+		return this.cachedPoints[pointID * 3 + 1]
+	}
+
+	readZ(pointID){
+		return this.cachedPoints[pointID * 3 + 2]
 	}
 
 	render(properties, parentModel) {
@@ -539,6 +562,8 @@ document.addEventListener('keyup', e => {
 	KEYS[e.key] = false
 })
 
+const DEBUG = false
+
 const WORLD = []
 const CHUNKS = {}
 WORLD.time = new Date().getTime()
@@ -577,15 +602,15 @@ const ROCK_TRIANGLES = [
 const ISLAND_TRIANGLES_COLOR = 2
 const ISLAND_LINES_COLOR = 3
 const ISLAND_POINTS = [
-   -CHUNK_SIDE / 2, -0.2, 0, //0
-	0,              -0.2, 0, //1
+   -CHUNK_SIDE / 2, -0.2, 0,                       //0
+	0,              -0.2, 0,                       //1
    -CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12, //2
-   -CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4, //3
+   -CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,  //3
 	CHUNK_SIDE / 4,  0.4, CHUNK_SIDE * sqrt3 / 12, //4
-	CHUNK_SIDE / 2, -0.2, 0, //5
-	CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4, //6
-	0,               0.4, CHUNK_SIDE * sqrt3 / 3, //7
-	0,              -0.2, CHUNK_SIDE * sqrt3 / 2, //8
+	CHUNK_SIDE / 2, -0.2, 0,                       //5
+	CHUNK_SIDE / 4, -0.2, CHUNK_SIDE * sqrt3 / 4,  //6
+	0,               0.4, CHUNK_SIDE * sqrt3 / 3,  //7
+	0,              -0.2, CHUNK_SIDE * sqrt3 / 2,  //8
 ]
 const ISLAND_TRIANGLES = [
 	0, 1, 2,
@@ -692,6 +717,61 @@ const BOAT_SAIL_TRIANGLES = [
 const BOAT_SAIL = new Mesh(6, 7, BOAT_SAIL_POINTS, BOAT_SAIL_TRIANGLES)
 BOAT_MAST.children.push(BOAT_SAIL)
 
+const collidablePoints = {}
+const BOAT_COLLIDER_Y = 0.6 / 4
+const BOAT_COLLIDER_WIDTH = 1.6 / 4  //x
+const BOAT_COLLIDER_HEIGHT = 2.6 / 4 //y
+const BOAT_COLLIDER_LENGTH = 3.6 / 4 //z
+function rotateRelativeCoord(relativeCoord){
+	return [relativeCoord[0], relativeCoord[1], relativeCoord[2], 1].x(rotate(-BOAT_BODY.rotation.y, -BOAT_BODY.rotation.x, -BOAT_BODY.rotation.z, true))
+}
+function pointRadius(rotatedRelativeCoord){
+	return Math.sqrt(Math.pow((rotatedRelativeCoord[0] / BOAT_COLLIDER_WIDTH), 2) + Math.pow(((rotatedRelativeCoord[1] - BOAT_COLLIDER_Y) / BOAT_COLLIDER_HEIGHT), 2) + Math.pow((rotatedRelativeCoord[2] / BOAT_COLLIDER_LENGTH), 2))
+}
+function pointRadiusPartial(rotatedRelativeCoord, which){
+	switch(which){
+		case 0: //x
+			let currentColliderHeight = BOAT_COLLIDER_HEIGHT * Math.cos(Math.PI / 2 * rotatedRelativeCoord[0] / BOAT_COLLIDER_WIDTH)
+			let currentColliderLength = BOAT_COLLIDER_LENGTH * Math.cos(Math.PI / 2 * rotatedRelativeCoord[0] / BOAT_COLLIDER_WIDTH)
+			return Math.sqrt(Math.pow((rotatedRelativeCoord[1] - BOAT_COLLIDER_Y) / currentColliderHeight, 2) + Math.pow(rotatedRelativeCoord[2] / currentColliderLength, 2))
+		case 1: //y
+			let currentColliderWidth = BOAT_COLLIDER_WIDTH * Math.cos(Math.PI / 2 * rotatedRelativeCoord[1] / BOAT_COLLIDER_HEIGHT)
+			let currentColliderLength = BOAT_COLLIDER_LENGTH * Math.cos(Math.PI / 2 * rotatedRelativeCoord[1] / BOAT_COLLIDER_HEIGHT)
+			return Math.sqrt(Math.pow(rotatedRelativeCoord[0] / currentColliderWidth, 2) + Math.pow(rotatedRelativeCoord[2] / currentColliderLength, 2))
+		case 2: //z
+			let currentColliderWidth = BOAT_COLLIDER_WIDTH * Math.cos(Math.PI / 2 * rotatedRelativeCoord[2] / BOAT_COLLIDER_LENGTH)
+			let currentColliderHeight = BOAT_COLLIDER_HEIGHT * Math.cos(Math.PI / 2 * rotatedRelativeCoord[2] / BOAT_COLLIDER_LENGTH)
+			return Math.sqrt(Math.pow(rotatedRelativeCoord[0] / currentColliderWidth, 2) + Math.pow((rotatedRelativeCoord[1] - BOAT_COLLIDER_Y) / currentColliderHeight, 2))
+	}
+}
+function rotatedRelavivePointInside(rotatedRelativeCoord){
+	return pointRadius(rotatedRelativeCoord) <= 1
+}
+
+const VECTOR1 = new Mesh(7, 7,
+   [-BOAT_COLLIDER_WIDTH, 0.0, -BOAT_COLLIDER_LENGTH,
+	-BOAT_COLLIDER_WIDTH, 0.0,  BOAT_COLLIDER_LENGTH], [ 0, 1, 0 ])
+VECTOR1.offset.y = BOAT_COLLIDER_Y
+VECTOR1.translation = BOAT_BODY.translation
+VECTOR1.rotation = BOAT_BODY.rotation
+const VECTOR2 = new Mesh(7, 7,
+   [-BOAT_COLLIDER_WIDTH, -BOAT_COLLIDER_HEIGHT, 0.0,
+	-BOAT_COLLIDER_WIDTH,  BOAT_COLLIDER_HEIGHT, 0.0], [ 0, 1, 0 ])
+VECTOR2.offset.y = BOAT_COLLIDER_Y
+VECTOR2.translation = BOAT_BODY.translation
+VECTOR2.rotation = BOAT_BODY.rotation
+const VECTOR3 = new Mesh(7, 7,
+   [-BOAT_COLLIDER_WIDTH, BOAT_COLLIDER_HEIGHT, 0.0,
+	 BOAT_COLLIDER_WIDTH, BOAT_COLLIDER_HEIGHT, 0.0], [ 0, 1, 0 ])
+VECTOR3.offset.y = BOAT_COLLIDER_Y
+VECTOR3.translation = BOAT_BODY.translation
+VECTOR3.rotation = BOAT_BODY.rotation
+if (DEBUG){
+	WORLD.push(VECTOR1)
+	WORLD.push(VECTOR2)
+	WORLD.push(VECTOR3)
+}
+
 const BOAT_MOTION = new Model()
 const CURRENT_WIND = new Model()
 const CURRENT_WATER_FLOW = new Model()
@@ -716,12 +796,12 @@ const CENTER_IDS = [2, 4, 7]
 const LEFT = 0
 const VERTICAL = 1
 const RIGHT = 2
-function getEdgeID(tile, sideNum){
+function getEdgeID(up, sideNum){
 	switch(sideNum){
 		case LEFT:
-			return tile.up() ? 3 : 6
+			return up ? 3 : 6
 		case RIGHT:
-			return tile.up() ? 6 : 3
+			return up ? 6 : 3
 		case VERTICAL:
 			return 1
 	}
@@ -760,7 +840,7 @@ function updateIslandEdges(tile){
 	let up = tile.up()
 	for (let anotherTile of goodSurroundings(tile)){
 		let anotherAbsolute = tile.add(anotherTile)
-		let edgeID = getEdgeID(tile, 1 + anotherTile.x())
+		let edgeID = getEdgeID(up, 1 + anotherTile.x())
 		if (cached[anotherAbsolute] == 1)
 			if (CHUNKS[anotherAbsolute] && CHUNKS[anotherAbsolute][1]){
 				let height = CHUNKS[anotherAbsolute][1].readY(edgeID)
@@ -787,7 +867,7 @@ function updateIslandPoints(tile){
 		for (let i = 0; i < surr.length; i++){
 			let anotherAbsolute = tile.add(surr[i])
 			count += cached[anotherAbsolute] == 1
-			if (CHUNKS[anotherAbsolute] != undefined && CHUNKS[anotherAbsolute][1] != undefined)
+			if (CHUNKS[anotherAbsolute] != undefined && CHUNKS[anotherAbsolute][1] != undefined && CHUNKS[anotherAbsolute][1].cachedPoints.length == 9 * 3)
 				height = Math.max(height, CHUNKS[anotherAbsolute][1].readY(curIndices[i]))
 		}
 		if (height < 0)
@@ -808,17 +888,20 @@ function addChunk(chunk, tile){
 	chunk.translation.x = tile.x() * CHUNK_SIDE / 2
 	CHUNKS[tile].push(chunk)
 }
-let unusedWater = []
-let unusedIslands = []
-let unusedRocks = []
+const unusedWater = []
+const unusedIslands = []
+const unusedRocks = []
 function shift(delta_x, delta_y){
 	renderCamera[0] += delta_x
 	renderCamera[1] += delta_y
+	for (let tile in collidablePoints)
+		if (tile != renderCamera.toString() && surroundings(renderCamera.toString()).indexOf(tile.add(renderCamera.toString().mul(-1))) == -1)
+			delete collidablePoints[tile]
 	for (let tile in CHUNKS)
 		if (renderArea.indexOf(tile.add(renderCamera.toString().mul(-1))) == -1){
 			unusedWater.push(CHUNKS[tile][0])
 			if (CHUNKS[tile][1])
-				if (CHUNKS[tile][1].cachedY.length != 4)
+				if (CHUNKS[tile][1].cachedPoints.length != 4 * 3)
 					unusedIslands.push(CHUNKS[tile][1])
 				else
 					unusedRocks.push(CHUNKS[tile][1])
@@ -839,7 +922,30 @@ function shift(delta_x, delta_y){
 					addChunk(unusedRocks.pop() || rock(), absolute)
 			}
 		}
+		let up = absolute.up()
+		if ((tile == "0,0" || surroundings(renderCamera.toString()).indexOf(tile) != -1) && CHUNKS[absolute][1] && collidablePoints[absolute] == undefined){
+			collidablePoints[absolute] = []
+			for (let i = 0; i < CHUNKS[absolute][1].cachedPoints.length / 3; i++){
+				collidablePoints[absolute].push([CHUNKS[absolute][1].cachedPoints[i * 3] * (up ? 1 : -1) + absolute.x() * CHUNK_SIDE / 2,
+												 CHUNKS[absolute][1].cachedPoints[i * 3 + 1],
+												 CHUNKS[absolute][1].cachedPoints[i * 3 + 2] * (up ? 1 : -1) + (!up) * CHUNK_SIDE * sqrt3 / 2 + absolute.y() * CHUNK_SIDE * sqrt3 / 2])
+				if (DEBUG)
+					addDebugRock(collidablePoints[absolute][i])
+			}
+		}
 	}
+}
+
+function addDebugRock(coord){
+	let p = new Mesh(4, 5, ROCK_POINTS, ROCK_TRIANGLES)
+	let pScale = 0.3
+	p.translation.x = coord[0]
+	p.translation.y = coord[1]
+	p.translation.z = coord[2] - CHUNK_SIDE * sqrt3 / 6 * pScale
+	p.scale.x = pScale
+	p.scale.y = pScale
+	p.scale.z = pScale
+	WORLD.push(p)
 }
 
 const SAIL_ANIMATION_LENGTH = 700
@@ -954,6 +1060,24 @@ requestAnimationFrame(function render() {
 	if (KEYS["ArrowRight"])
 		BOAT_MAST.rotation.y = Math.max(BOAT_MAST.rotation.y - 0.002 * WORLD.dt, Math.PI / 2)
 
+	for (let tile in collidablePoints)
+		for (let point of collidablePoints[tile]){
+			let relative = [point[0] - BOAT_BODY.translation.x, point[1] - BOAT_BODY.translation.y, point[2] - BOAT_BODY.translation.z]
+			let relativeLength = Math.sqrt(Math.pow(relative[0], 2) + Math.pow(relative[1], 2) + Math.pow(relative[2], 2))
+			if (relativeLength <= Math.max(BOAT_COLLIDER_WIDTH, BOAT_COLLIDER_HEIGHT, BOAT_COLLIDER_LENGTH)){
+				let rotatedRelativeCoord = rotateRelativeCoord(relative)
+				if (rotatedRelavivePointInside(rotatedRelativeCoord)){
+					let force = 1 - pointRadius(rotatedRelativeCoord)
+					BOAT_MOTION.translation.x -= relative[0] / relativeLength * force / 1000
+					BOAT_MOTION.translation.y -= relative[1] / relativeLength * force / 1000
+					BOAT_MOTION.translation.z -= relative[2] / relativeLength * force / 1000
+					BOAT_MOTION.rotation.x += Math.sign(rotatedRelativeCoord[1]) * Math.sign(rotatedRelativeCoord[2]) * Math.sqrt((1 - rotatedRelativeCoord[2] / Math.sqrt(rotatedRelativeCoord[1] * rotatedRelativeCoord[1] + rotatedRelativeCoord[2] * rotatedRelativeCoord[2])) / 2) * force
+					BOAT_MOTION.rotation.y -= Math.sign(rotatedRelativeCoord[0]) * Math.sign(rotatedRelativeCoord[2]) * Math.sqrt((1 - rotatedRelativeCoord[2] / Math.sqrt(rotatedRelativeCoord[0] * rotatedRelativeCoord[0] + rotatedRelativeCoord[2] * rotatedRelativeCoord[2])) / 2) * force / 500
+					BOAT_MOTION.rotation.z -= Math.sign(rotatedRelativeCoord[0]) * Math.sign(rotatedRelativeCoord[1]) * Math.sqrt((1 - rotatedRelativeCoord[1] / Math.sqrt(rotatedRelativeCoord[0] * rotatedRelativeCoord[0] + rotatedRelativeCoord[1] * rotatedRelativeCoord[1])) / 2) * force
+				}
+			}
+		}
+
 	BOAT_BODY.translation.x += BOAT_MOTION.translation.x * WORLD.dt
 	BOAT_BODY.translation.y += BOAT_MOTION.translation.y * Math.min(WORLD.dt / 700, 1)
 	BOAT_BODY.translation.z += BOAT_MOTION.translation.z * WORLD.dt
@@ -975,7 +1099,7 @@ requestAnimationFrame(function render() {
 		sailState = Math.max(sailState - WORLD.dt / SAIL_ANIMATION_LENGTH, 0)
 	else
 		sailState = Math.min(sailState + WORLD.dt / SAIL_ANIMATION_LENGTH, 1)
-	BOAT_SAIL.update([0], [-1.3 * CURRENT_WIND.translation.x / MAX_FLOW_FORCE * windToSail * sailState, 2.3, 1.5])
+	BOAT_SAIL.updateX(0, -1.3 * CURRENT_WIND.translation.x / MAX_FLOW_FORCE * windToSail * sailState)
 	for (let i = 1; i < BOAT_SAIL_POINTS.length; i += 3)
 		BOAT_SAIL.updateY(Math.floor(i / 3), SAIL_ANIMATION_FLOOR + (BOAT_SAIL_POINTS[i] - SAIL_ANIMATION_FLOOR) * sailState)
 
