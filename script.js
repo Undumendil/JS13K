@@ -44,10 +44,10 @@ class Mesh extends Model {
 		points.forEach(x => this.cachedPoints.push(x))
 		this.points = createArrayBuffer(points)
 		this.trianglesIDs = createArrayBuffer(triangles, true)
-		let tempLines = calculateLinesIDs(triangles)
-		this.linesIDs = createArrayBuffer(tempLines, true)
+		this.cachedLines = calculateLinesIDs(triangles)
+		this.linesIDs = createArrayBuffer(this.cachedLines, true)
 		this.trianglesLength = triangles.length
-		this.linesLength = tempLines.length
+		this.linesLength = this.cachedLines.length
 	}
 
 	update(pointsIDs, coords){
@@ -722,6 +722,7 @@ const BOAT_COLLIDER_Y = 0.6 / 4
 const BOAT_COLLIDER_WIDTH = 1.6 / 4  //x
 const BOAT_COLLIDER_HEIGHT = 2.6 / 4 //y
 const BOAT_COLLIDER_LENGTH = 3.6 / 4 //z
+const INTERMEDIATE_COUNT = 3
 function rotateRelativeCoord(relativeCoord){
 	return [relativeCoord[0], relativeCoord[1], relativeCoord[2], 1].x(rotate(-BOAT_BODY.rotation.y, -BOAT_BODY.rotation.x, -BOAT_BODY.rotation.z, true))
 }
@@ -932,6 +933,17 @@ function shift(delta_x, delta_y){
 				if (DEBUG)
 					addDebugRock(collidablePoints[absolute][i])
 			}
+			for (let i = 0; i < CHUNKS[absolute][1].cachedLines.length; i += 2){
+				let p1 = CHUNKS[absolute][1].cachedPoints.slice(CHUNKS[absolute][1].cachedLines[i] * 3, CHUNKS[absolute][1].cachedLines[i] * 3 + 3)
+				let p2 = CHUNKS[absolute][1].cachedPoints.slice(CHUNKS[absolute][1].cachedLines[i + 1] * 3, CHUNKS[absolute][1].cachedLines[i + 1] * 3 + 3)
+				for (let j = 1; j < INTERMEDIATE_COUNT + 1; j++){
+					collidablePoints[absolute].push([(p1[0] * j + p2[0] * (INTERMEDIATE_COUNT + 1 - j)) / (INTERMEDIATE_COUNT + 1) * (up ? 1 : -1) + absolute.x() * CHUNK_SIDE / 2,
+													 (p1[1] * j + p2[1] * (INTERMEDIATE_COUNT + 1 - j)) / (INTERMEDIATE_COUNT + 1),
+													 (p1[2] * j + p2[2] * (INTERMEDIATE_COUNT + 1 - j)) / (INTERMEDIATE_COUNT + 1) * (up ? 1 : -1) + (!up) * CHUNK_SIDE * sqrt3 / 2 + absolute.y() * CHUNK_SIDE * sqrt3 / 2])
+					if (DEBUG)
+						addDebugRock(collidablePoints[absolute][collidablePoints[absolute].length - 1])
+				}
+			}
 		}
 	}
 }
@@ -986,7 +998,10 @@ requestAnimationFrame(function render() {
 	let waveState = WORLD.time % 2000 / 2000
 	let waveX = (BOAT_BODY.translation.x / 5.0 + waveState) * 2.0 * 3.14
 	let waveZ = (BOAT_BODY.translation.z / 5.0 + waveState) * 2.0 * 3.14
-	BOAT_MOTION.translation.y = 0.15 * (Math.sin(waveX) + Math.cos(waveZ)) - BOAT_BODY.translation.y
+	if (Math.sin(waveX) + Math.cos(waveZ) < 0)
+		BOAT_MOTION.translation.y = 0.15 * (Math.sin(waveX) + Math.cos(waveZ)) - BOAT_BODY.translation.y
+	else
+		BOAT_MOTION.translation.y -= 0.001
 
 	let boat = "0,0".add(BOAT_BODY.translation.x, BOAT_BODY.translation.z)
 	let delta = renderCamera.toString().toWorldCoordinate().add(boat.mul(-1))
@@ -1027,7 +1042,7 @@ requestAnimationFrame(function render() {
 	BOAT_MOTION.translation.z += 0.0005 * Math.cos(BOAT_BODY.rotation.y) * speed
 
 	let apmlitude = CURRENT_WIND.translation.x
-	let sailToWater = Math.pow(Math.sqrt(1 / (1 / Math.cos(BOAT_BODY.rotation.x) + 1 / Math.cos(BOAT_BODY.rotation.z) - 1)), 7)
+	let sailToWater = Math.pow(Math.sqrt(1 / (1 / Math.abs(Math.cos(BOAT_BODY.rotation.x)) + 1 / Math.abs(Math.cos(BOAT_BODY.rotation.z)) - 1)), 7)
 	let windToSail = Math.cos(CURRENT_WIND.rotation.y - BOAT_MAST.rotation.y - BOAT_BODY.rotation.y) * sailToWater * sailState
 	let windSpeed = Math.sin(BOAT_MAST.rotation.y) * Math.sign(windToSail) * apmlitude
 	let sideWindSpeed = 0.1 * Math.cos(BOAT_MAST.rotation.y) * windToSail * apmlitude
@@ -1067,13 +1082,13 @@ requestAnimationFrame(function render() {
 			if (relativeLength <= Math.max(BOAT_COLLIDER_WIDTH, BOAT_COLLIDER_HEIGHT, BOAT_COLLIDER_LENGTH)){
 				let rotatedRelativeCoord = rotateRelativeCoord(relative)
 				if (rotatedRelavivePointInside(rotatedRelativeCoord)){
-					let force = 1 - pointRadius(rotatedRelativeCoord)
-					BOAT_MOTION.translation.x -= relative[0] / relativeLength * force / 1000
-					BOAT_MOTION.translation.y -= relative[1] / relativeLength * force / 1000
-					BOAT_MOTION.translation.z -= relative[2] / relativeLength * force / 1000
-					BOAT_MOTION.rotation.x += Math.sign(rotatedRelativeCoord[1]) * Math.sign(rotatedRelativeCoord[2]) * Math.sqrt((1 - rotatedRelativeCoord[2] / Math.sqrt(rotatedRelativeCoord[1] * rotatedRelativeCoord[1] + rotatedRelativeCoord[2] * rotatedRelativeCoord[2])) / 2) * force
-					BOAT_MOTION.rotation.y -= Math.sign(rotatedRelativeCoord[0]) * Math.sign(rotatedRelativeCoord[2]) * Math.sqrt((1 - rotatedRelativeCoord[2] / Math.sqrt(rotatedRelativeCoord[0] * rotatedRelativeCoord[0] + rotatedRelativeCoord[2] * rotatedRelativeCoord[2])) / 2) * force / 500
-					BOAT_MOTION.rotation.z -= Math.sign(rotatedRelativeCoord[0]) * Math.sign(rotatedRelativeCoord[1]) * Math.sqrt((1 - rotatedRelativeCoord[1] / Math.sqrt(rotatedRelativeCoord[0] * rotatedRelativeCoord[0] + rotatedRelativeCoord[1] * rotatedRelativeCoord[1])) / 2) * force
+					let force = (1 - pointRadius(rotatedRelativeCoord)) * Math.sqrt(BOAT_MOTION.translation.x * BOAT_MOTION.translation.x + BOAT_MOTION.translation.z * BOAT_MOTION.translation.z)
+					BOAT_MOTION.translation.x -= relative[0] / relativeLength * force * 10
+					BOAT_MOTION.translation.y -= relative[1] / relativeLength * force * 10
+					BOAT_MOTION.translation.z -= relative[2] / relativeLength * force * 10
+					BOAT_MOTION.rotation.x += Math.sign(rotatedRelativeCoord[1]) * Math.sign(rotatedRelativeCoord[2]) * Math.sqrt((1 - rotatedRelativeCoord[2] / Math.sqrt(rotatedRelativeCoord[1] * rotatedRelativeCoord[1] + rotatedRelativeCoord[2] * rotatedRelativeCoord[2])) / 2) * force * 50000
+					BOAT_MOTION.rotation.y -= Math.sign(rotatedRelativeCoord[0]) * Math.sign(rotatedRelativeCoord[2]) * Math.sqrt((1 - rotatedRelativeCoord[2] / Math.sqrt(rotatedRelativeCoord[0] * rotatedRelativeCoord[0] + rotatedRelativeCoord[2] * rotatedRelativeCoord[2])) / 2) * force * 100
+					BOAT_MOTION.rotation.z -= Math.sign(rotatedRelativeCoord[0]) * Math.sign(rotatedRelativeCoord[1]) * Math.sqrt((1 - rotatedRelativeCoord[1] / Math.sqrt(rotatedRelativeCoord[0] * rotatedRelativeCoord[0] + rotatedRelativeCoord[1] * rotatedRelativeCoord[1])) / 2) * force * 10000
 				}
 			}
 		}
